@@ -35,7 +35,7 @@ Chưa triển khai: panorama tự ghép, Live Photo, theo mắt/chủ thể, gh�
 - Kiểm tra cú pháp shell, plist và cấu trúc project trước khi build.
 - CI chạy 12 kiểm tra toán học cho crop/điểm lấy nét/mirroring/luma/bracket/time.
 - CI archive bằng SDK iPhoneOS, kiểm tra Mach-O ARM64, ZIP và SHA256 rồi đóng IPA.
-- CI build simulator và chụp giao diện camera / Pro / thiết lập.
+- CI build simulator, mở camera / Pro / thiết lập và chụp giao diện. Kiểm tra pipeline JPEG/HEIF, EXIF, ảnh gốc, sidecar RAW, histogram, phơi ghép và file time-lapse bằng ảnh mẫu tổng hợp; không dùng camera giả để báo đã thử phần cứng.
 - Camera vật lý, RAW/ProRAW, flash, mic, HLG/Log, thermal và vòng đời khi khóa máy cần kiểm tra trên iPhone thật. Simulator không chứng minh các tính năng này hoạt động trên phần cứng.
 
 ## Kiểm tra nhanh sau khi cài

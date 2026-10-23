@@ -187,8 +187,8 @@ struct CameraScreen: View {
                     if let overlay = camera.analysis.overlay, !camera.imported, camera.options.zebra || camera.options.peaking {
                         Image(uiImage: overlay).resizable().interpolation(.none).frame(width: width, height: height).allowsHitTesting(false)
                     }
-                    if camera.options.safeFrame { Rectangle().strokeBorder(.white.opacity(0.45), style: StrokeStyle(lineWidth: 0.7, dash: [4, 3])).padding(width * 0.05).allowsHitTesting(false) }
-                    if camera.options.level && !camera.imported {
+                    if camera.options.safeFrame { Rectangle().strokeBorder(.white.opacity(0.45), style: StrokeStyle(lineWidth: 0.7, dash: [4, 3])).padding(.horizontal, width * 0.05).padding(.vertical, height * 0.05).allowsHitTesting(false) }
+                    if camera.options.level && !camera.imported && camera.preview != nil {
                         ZStack {
                             Rectangle().fill(.white.opacity(0.45)).frame(width: 68, height: 1)
                             Rectangle().fill(abs(horizon.degrees) < 1.5 ? Color.green : Color.yellow).frame(width: 68, height: 2).rotationEffect(.degrees(-horizon.degrees))
@@ -210,7 +210,7 @@ struct CameraScreen: View {
                                 }
                             }
                     }
-                    if camera.options.histogram && !camera.imported { VStack { HStack { Spacer(); ProHistogram(analysis: camera.analysis) }; Spacer() }.padding(.top, 59).padding(.trailing, 18).allowsHitTesting(false) }
+                    if camera.options.histogram && !camera.imported && camera.preview != nil { VStack { HStack { Spacer(); ProHistogram(analysis: camera.analysis) }; Spacer() }.padding(.top, 59).padding(.trailing, 18).allowsHitTesting(false) }
                     RangefinderCorners().stroke(.white.opacity(0.45), lineWidth: 0.7)
                         .padding(11).allowsHitTesting(false)
                     if let focusPoint {
@@ -286,8 +286,8 @@ struct CameraScreen: View {
             if camera.mode == .portrait { Text("Xoá phông người khi lưu").font(.system(size: 10)).padding(6).background(.black.opacity(0.35), in: Capsule()) }
             if camera.mode == .longExposure { Text("STACK · \(Int(camera.options.longSeconds))s · tripod").font(.system(size: 10, design: .monospaced)).padding(6).background(.black.opacity(0.35), in: Capsule()) }
             HStack(spacing: 9) {
-                Text(camera.imported ? "ON-DEVICE COLOR" : String(format: "ISO %.0f", camera.currentISO))
-                if !camera.imported {
+                Text(camera.imported ? "ON-DEVICE COLOR" : camera.running ? String(format: "ISO %.0f", camera.currentISO) : "CAMERA CHƯA BẬT")
+                if !camera.imported && camera.running {
                     Text(shutterName(camera.currentShutter))
                     if camera.manualExposure { Text("M").foregroundStyle(cameraRed) }
                     Text(String(format: "%+.1f", camera.meterEV))
@@ -381,7 +381,7 @@ struct CameraScreen: View {
                     }.frame(width: compact ? 68 : 76, height: compact ? 68 : 76)
                 }
                 .buttonStyle(CameraShutterStyle())
-                .disabled((camera.capturing && !camera.sequenceActive) || camera.changingLens || camera.recordingBusy || camera.adjustingExposure || shutterPending || (!camera.running && !camera.imported) || (camera.mode.isMovie && camera.selectedVideo == nil))
+                .disabled((camera.capturing && !camera.sequenceActive) || camera.changingLens || camera.recordingBusy || camera.adjustingExposure || (!camera.running && !camera.imported) || (camera.mode.isMovie && camera.selectedVideo == nil))
                 .accessibilityLabel(camera.recording || camera.sequenceActive ? "Dừng" : camera.mode.isMovie ? "Quay video" : camera.imported ? "Lưu ảnh đã chỉnh màu" : "Chụp ảnh")
                 Spacer()
                 Button { showControls = true } label: {
@@ -562,7 +562,7 @@ struct CameraScreen: View {
     private var ratioName: String { color.ratio == 1 ? "1:1" : color.ratio < 0.6 ? "16:9" : color.ratio < 0.7 ? "3:2" : "4:3" }
     private func update() { camera.updateColor(color) }
     private func timedCapture() {
-        guard !shutterPending else { return }
+        if shutterPending { countdownTask?.cancel(); countdown = 0; shutterPending = false; return }
         if camera.recording || camera.sequenceActive { camera.shutterAction(); return }
         let timer = camera.options.timerSeconds
         if timer == 0 { camera.shutterAction(); return }

@@ -28,7 +28,7 @@ final class FrameAnalyzer {
             result.red[Int(pixels[p]) / 4] += 1
             result.green[Int(pixels[p + 1]) / 4] += 1
             result.blue[Int(pixels[p + 2]) / 4] += 1
-            result.luma[min(63, Int(value * 63))] += 1
+            result.luma[min(63, max(0, Int(value * 64)))] += 1
             if max(pixels[p], max(pixels[p + 1], pixels[p + 2])) >= 250 { result.clipped += 1 }
             if options.zebra && value >= options.zebraThreshold && ((index % width + index / width) / 4).isMultiple(of: 2) {
                 overlay[p] = 255; overlay[p + 1] = 210; overlay[p + 2] = 0; overlay[p + 3] = 185

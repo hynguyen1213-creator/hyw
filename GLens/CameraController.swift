@@ -315,7 +315,7 @@ final class CameraController: NSObject, ObservableObject, AVCaptureVideoDataOutp
                 if device.isExposureModeSupported(.continuousAutoExposure) { device.exposureMode = .continuousAutoExposure }
                 DispatchQueue.main.async { self.adjustingExposure = false }
             }
-            DispatchQueue.main.async { self.manualExposure = manual }
+            DispatchQueue.main.async { self.manualExposure = manual; self.aeLocked = false }
         }
     }
     func setEV(_ ev: Float) { withDevice { d in
@@ -327,7 +327,7 @@ final class CameraController: NSObject, ObservableObject, AVCaptureVideoDataOutp
         withDevice { device in
             if manual && device.isLockingFocusWithCustomLensPositionSupported { device.setFocusModeLocked(lensPosition: max(0, min(1, position))) }
             else if device.isFocusModeSupported(.continuousAutoFocus) { device.focusMode = .continuousAutoFocus }
-            DispatchQueue.main.async { self.manualFocus = manual; self.focusPosition = max(0, min(1, position)) }
+            DispatchQueue.main.async { self.manualFocus = manual; self.afLocked = false; self.focusPosition = max(0, min(1, position)) }
         }
     }
     func setWB(manual: Bool, kelvin: Float, tint: Float = 0) {
@@ -499,6 +499,7 @@ final class CameraController: NSObject, ObservableObject, AVCaptureVideoDataOutp
                 DispatchQueue.main.async { self.capturing = false }; return
             }
             let warning = [error?.localizedDescription, job.error, job.requestedRAW && job.raw == nil ? "DNG yêu cầu chưa được camera trả về; JPEG vẫn được giữ." : nil].compactMap { $0 }.joined(separator: " ")
+            if job.options.sequence == .bracket && job.frames.count != 3 { self.notify("Camera chỉ trả về \(job.frames.count)/3 ảnh bracket. Các ảnh nhận được vẫn được giữ.") }
             self.photoQueue.async {
                 if job.frames.count > 1 {
                     defer { DispatchQueue.main.async { self.capturing = false; self.sequenceProgress = "" } }

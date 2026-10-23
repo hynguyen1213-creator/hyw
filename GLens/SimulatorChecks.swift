@@ -42,6 +42,7 @@ enum SimulatorChecks {
         let analyzer = FrameAnalyzer()
         let a = analyzer.analyze(white, options: options), b = analyzer.analyze(black, options: options)
         checks["White clipping detected"] = a.clipped > 0.99 && a.luma[63] > 0.99
+        notes.append("White clipped=\(a.clipped), last luma bin=\(a.luma[63])")
         checks["Black not clipped"] = b.clipped == 0 && b.luma[0] > 0.99
         checks["Zebra overlay generated"] = a.overlay != nil
         let stack = LongExposureAccumulator(duration: 1, blend: .average)
