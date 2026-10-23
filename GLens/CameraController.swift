@@ -24,6 +24,8 @@ struct CaptureJob {
 }
 final class CameraController: NSObject, ObservableObject, AVCaptureVideoDataOutputSampleBufferDelegate, AVCapturePhotoCaptureDelegate {
     @Published var preview: UIImage?
+    @Published var lookThumbnails: [String: UIImage] = [:]
+    var lookPreviewSource: CIImage?
     @Published var lenses: [LensDevice] = []
     @Published var selectedLens = ""
     @Published var permissionDenied = false
@@ -440,6 +442,7 @@ final class CameraController: NSObject, ObservableObject, AVCaptureVideoDataOutp
             guard now - lastPreviewTime > 1.0 / 24 else { return }; lastPreviewTime = now
             var display = state.0
             if state.2.isMovie { display.compare = true; display.ratio = 9.0 / 16 }
+            locked { lookPreviewSource = source }
             let image = engine.process(source, settings: display, preview: true)
             guard let result = engine.uiImage(image) else { return }
             var analysis: ExposureAnalysis?

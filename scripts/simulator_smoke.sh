@@ -12,7 +12,7 @@ xcrun simctl boot "$sim_id"
 xcrun simctl bootstatus "$sim_id" -b
 xcrun simctl status_bar "$sim_id" override --time '09:41' --dataNetwork wifi --wifiMode active --wifiBars 3 --batteryState charged --batteryLevel 100
 xcrun simctl install "$sim_id" build/simulator/Build/Products/Debug-iphonesimulator/GLens.app
-for surface in camera pro-controls pro-settings night-settings pano; do
+for surface in camera pro-controls pro-settings night-settings pano lux-quick film-looks mode-picker; do
   xcrun simctl launch --terminate-running-process "$sim_id" com.gstudio.glens --ui-smoke "--$surface"
   sleep 4
   xcrun simctl io "$sim_id" screenshot "build/screenshots/$surface.png"

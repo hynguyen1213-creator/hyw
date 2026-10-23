@@ -17,7 +17,13 @@ struct Look: Identifiable, Equatable, Codable {
         .init(id: "m9", name: "M9 · CCD", subtitle: "ESSENTIAL COLOR", saturation: 0.94, contrast: 1.15, warmth: 0.055, lift: 0.008),
         .init(id: "m3", name: "M3 · Mono", subtitle: "ESSENTIAL MONO", saturation: 0, contrast: 1.16, warmth: 0, lift: 0.014),
         .init(id: "gold", name: "Classic Gold", subtitle: "WARM FILM", saturation: 0.92, contrast: 1.05, warmth: 0.085, lift: 0.035),
-        .init(id: "noir", name: "Noir", subtitle: "LIGHT & SHADOW", saturation: 0, contrast: 1.4, warmth: 0, lift: 0)
+        .init(id: "noir", name: "Noir", subtitle: "LIGHT & SHADOW", saturation: 0, contrast: 1.4, warmth: 0, lift: 0),
+        .init(id: "gold200", name: "Gold 200", subtitle: "WARM COLOR NEGATIVE", saturation: 1, contrast: 1, warmth: 0, lift: 0),
+        .init(id: "portra400", name: "Portra 400", subtitle: "SOFT COLOR NEGATIVE", saturation: 1, contrast: 1, warmth: 0, lift: 0),
+        .init(id: "ektar100", name: "Ektar 100", subtitle: "FINE COLOR NEGATIVE", saturation: 1, contrast: 1, warmth: 0, lift: 0),
+        .init(id: "c200", name: "Fuji C200", subtitle: "EVERYDAY COLOR NEGATIVE", saturation: 1, contrast: 1, warmth: 0, lift: 0),
+        .init(id: "hp5", name: "HP5 400", subtitle: "CLASSIC BLACK & WHITE", saturation: 0, contrast: 1, warmth: 0, lift: 0),
+        .init(id: "cine800", name: "Cine 800T", subtitle: "TUNGSTEN CINEMA", saturation: 1, contrast: 1, warmth: 0, lift: 0)
     ]
 }
 struct ColorSettings: Codable {
@@ -45,6 +51,8 @@ struct ColorSettings: Codable {
 }
 final class ColorEngine {
     let context = CIContext(options: [.cacheIntermediates: false])
+    private let filmCubes = FilmProfile.all.mapValues { $0.cube() }
+    private let grainSource = CIFilter(name: "CIRandomGenerator")?.outputImage
     private let colorSpace = CGColorSpace(name: CGColorSpace.sRGB)!
     func crop(_ image: CIImage, ratio: CGFloat) -> CIImage {
         let r = image.extent
@@ -68,6 +76,9 @@ final class ColorEngine {
             "inputBiasVector": CIVector(x: CGFloat(look.warmth * 0.46 + look.lift), y: CGFloat(look.warmth * 0.08 + look.lift), z: CGFloat(-look.warmth * 0.34 + look.lift), w: 0)
         ])
         image = image.applyingFilter("CIHighlightShadowAdjust", parameters: ["inputHighlightAmount": 0.93, "inputShadowAmount": 0.02])
+        if let cube = filmCubes[look.id] {
+            image = original.applyingFilter("CIColorCubeWithColorSpace", parameters: ["inputCubeDimension":32,"inputCubeData":cube,"inputColorSpace":colorSpace])
+        }
         let blendBase = look.saturation == 0 ? original.applyingFilter("CIColorControls", parameters: [kCIInputSaturationKey: 0]) : original
         let mask = CIImage(color: CIColor(red: CGFloat(settings.strength), green: CGFloat(settings.strength), blue: CGFloat(settings.strength))).cropped(to: original.extent)
         image = image.applyingFilter("CIBlendWithMask", parameters: [kCIInputBackgroundImageKey: blendBase, kCIInputMaskImageKey: mask])
@@ -79,8 +90,19 @@ final class ColorEngine {
         if settings.vignette > 0 {
             image = image.applyingFilter("CIVignette", parameters: [kCIInputIntensityKey: settings.vignette * 0.75, kCIInputRadiusKey: min(image.extent.width, image.extent.height) * 0.65])
         }
-        if settings.grain > 0, let noise = CIFilter(name: "CIRandomGenerator")?.outputImage {
-            let grain = noise.cropped(to: image.extent).applyingFilter("CIColorControls", parameters: [kCIInputSaturationKey: 0])
+        if let profile = FilmProfile.all[look.id], profile.halation > 0, settings.strength > 0 {
+            let hot = original.applyingFilter("CIColorMatrix", parameters: ["inputRVector":CIVector(x:4,y:0,z:0,w:0),"inputGVector":CIVector(x:0,y:4,z:0,w:0),"inputBVector":CIVector(x:0,y:0,z:4,w:0),"inputBiasVector":CIVector(x:-3,y:-3,z:-3,w:0)])
+                .applyingFilter("CIColorClamp").clampedToExtent()
+                .applyingFilter("CIGaussianBlur", parameters:[kCIInputRadiusKey:max(image.extent.width,image.extent.height)/180])
+                .applyingFilter("CIColorMatrix", parameters:["inputRVector":CIVector(x:0.8,y:0.15,z:0.05,w:0),"inputGVector":CIVector(x:0.1,y:0.04,z:0,w:0),"inputBVector":CIVector(x:0,y:0,z:0,w:0)])
+            let halo = hot.applyingFilter("CIScreenBlendMode",parameters:[kCIInputBackgroundImageKey:image]).cropped(to:image.extent)
+            let amount = CGFloat(profile.halation*settings.strength)
+            let mask = CIImage(color:CIColor(red:amount,green:amount,blue:amount)).cropped(to:image.extent)
+            image = halo.applyingFilter("CIBlendWithMask",parameters:[kCIInputBackgroundImageKey:image,kCIInputMaskImageKey:mask])
+        }
+        if settings.grain > 0, let noise = grainSource {
+            let scale = max(0.6,max(image.extent.width,image.extent.height)/1600)
+            let grain = noise.transformed(by:CGAffineTransform(scaleX:scale,y:scale)).cropped(to: image.extent).applyingFilter("CIColorControls", parameters: [kCIInputSaturationKey: 0])
             let blend = grain.applyingFilter("CISoftLightBlendMode", parameters: [kCIInputBackgroundImageKey: image])
             let amount = CGFloat(settings.grain * 0.16)
             let mask = CIImage(color: CIColor(red: amount, green: amount, blue: amount)).cropped(to: image.extent)

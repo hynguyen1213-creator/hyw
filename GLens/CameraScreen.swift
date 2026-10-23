@@ -4,7 +4,7 @@ import UniformTypeIdentifiers
 
 private let cameraRed = Color(red: 0.89, green: 0.19, blue: 0.15)
 private let cameraWhite = Color(white: 0.96)
-private let cameraBlack = Color(red: 0.045, green: 0.049, blue: 0.047)
+private let cameraBlack = Color.black
 private let cameraPanel = Color(red: 0.095, green: 0.10, blue: 0.098)
 
 struct CameraScreen: View {
@@ -20,6 +20,8 @@ struct CameraScreen: View {
     @State private var showLooks = false
     @State private var showColor = false
     @State private var showHelp = false
+    @State private var showQuick = false
+    @State private var showModes = false
     @State private var showFileImport = false
     @State private var picker: PhotosPickerItem?
     @State private var countdown = 0
@@ -33,12 +35,11 @@ struct CameraScreen: View {
             let compact = geometry.size.height < 690
             VStack(spacing: 0) {
                 header(compact: compact)
-                utilityBar
                 if camera.mode == .pro { quickControls }
                 viewfinder
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
+                luxControlBar
                 captureDeck(compact: compact)
-                colorBar
             }
             .frame(width: geometry.size.width, height: geometry.size.height)
         }
@@ -54,6 +55,9 @@ struct CameraScreen: View {
             if ProcessInfo.processInfo.arguments.contains("--pro-controls") { showControls = true }
             if ProcessInfo.processInfo.arguments.contains("--night-settings") { camera.changeMode(.night); showProSettings = true }
             if ProcessInfo.processInfo.arguments.contains("--pano") { camera.changeMode(.panorama) }
+            if ProcessInfo.processInfo.arguments.contains("--lux-quick") { showQuick = true }
+            if ProcessInfo.processInfo.arguments.contains("--film-looks") { showLooks = true }
+            if ProcessInfo.processInfo.arguments.contains("--mode-picker") { showModes = true }
         }
         .onDisappear { horizon.stop() }
         .onChange(of: camera.options) { _, _ in camera.updateOptions() }
@@ -90,6 +94,12 @@ struct CameraScreen: View {
                 }
             }
         }
+        .sheet(isPresented: $showQuick) {
+            LuxQuickPanel(camera:camera,looks:{ showLooks = true },advanced:{ showProSettings = true })
+                .presentationDetents([.height(620)]).presentationDragIndicator(.visible).presentationCornerRadius(26)
+        }
+        .sheet(isPresented: $showModes) { modeDrawer.presentationDetents([.height(450)]).presentationDragIndicator(.visible).presentationBackground(cameraPanel) }
+        .onChange(of: showLooks) { _, visible in if visible { camera.prepareLookThumbnails() } }
         .sheet(isPresented: $showProSettings) { ProSettingsPanel(camera: camera) }
         .sheet(isPresented: $showPresets) { PresetPanel(camera: camera) }
         .sheet(isPresented: $showControls) {
@@ -99,7 +109,7 @@ struct CameraScreen: View {
         }
         .sheet(isPresented: $showGallery) { GalleryScreen(camera: camera) }
         .sheet(isPresented: $showLooks) {
-            looksDrawer.presentationDetents([.height(460), .large])
+            looksDrawer.presentationDetents([.height(600), .large])
                 .presentationDragIndicator(.visible).presentationCornerRadius(26)
                 .presentationBackground(cameraPanel)
         }
@@ -118,73 +128,46 @@ struct CameraScreen: View {
     }
 
     private func header(compact: Bool) -> some View {
-        HStack(alignment: .center, spacing: 0) {
-            HStack(spacing: 7) {
-                Circle().fill(cameraRed).frame(width: 8, height: 8)
-                Text("G.LENS").font(.system(size: 20, weight: .semibold)).tracking(-0.8)
-            }
+        HStack {
+            Button { showQuick = true } label: { Image(systemName: camera.options.flash == 0 ? "bolt.slash" : "bolt").font(.system(size:19,weight:.light)).frame(width:44,height:44) }
+                .accessibilityLabel("Mở thiết lập nhanh")
             Spacer()
-            Text(camera.imported ? "DARKROOM" : "PRO CAMERA")
-                .font(.system(size: 8, weight: .medium, design: .monospaced))
-                .tracking(2.3).foregroundStyle(.white.opacity(0.35))
+            Text(camera.imported ? "DARKROOM" : "G.LENS").font(.system(size:12,weight:.medium,design:.monospaced)).tracking(2).foregroundStyle(.white.opacity(0.65))
             Spacer()
-            PhotosPicker(selection: $picker, matching: .images) {
-                Image(systemName: "photo.badge.plus").font(.system(size: 17, weight: .light))
-                    .frame(width: 36, height: 36)
-            }.accessibilityLabel("Mở ảnh").disabled(camera.recording || camera.recordingBusy || camera.capturing || camera.sequenceActive)
-            Button { showFileImport = true } label: { Image(systemName: "doc.badge.plus").frame(width: 32, height: 36) }
-                .accessibilityLabel("Mở RAW/DNG từ Tệp").disabled(camera.recording || camera.recordingBusy || camera.capturing || camera.sequenceActive)
-            Button { showProSettings = true } label: {
-                Image(systemName: "gearshape").font(.system(size: 19, weight: .regular))
-                    .frame(width: 32, height: 36)
-            }.accessibilityLabel("Thiết lập chụp")
-        }
-        .padding(.horizontal, 21).frame(height: compact ? 44 : 52)
+            Button { showQuick = true } label: { Image(systemName:"slider.horizontal.3").font(.system(size:19,weight:.light)).frame(width:44,height:44) }.accessibilityLabel("Thiết lập nhanh")
+        }.padding(.horizontal,12).frame(height:compact ? 44 : 48)
     }
-
-    private var utilityBar: some View {
-        HStack(spacing: 0) {
-            HStack(spacing: 6) {
-                Circle().fill(camera.running ? Color.green.opacity(0.7) : cameraRed.opacity(0.8))
-                    .frame(width: 3, height: 3)
-                Text(camera.recording ? "REC " + ProMath.durationLabel(camera.elapsed) : camera.imported ? "EDIT" : "LIVE")
-                    .font(.system(size: 8, weight: .medium, design: .monospaced)).tracking(1.2)
-            }.foregroundStyle(.white.opacity(0.55))
-            Spacer()
-            Button {
-                if camera.supportsRaw && !camera.imported { camera.rawEnabled.toggle() }
-            } label: {
-                Text(camera.mode.isMovie ? (camera.selectedVideo?.tone.rawValue ?? "VIDEO") : camera.rawEnabled && !camera.imported ? "RAW+" : camera.options.encoding.rawValue)
-                    .font(.system(size: 8, weight: .semibold, design: .monospaced))
-                    .padding(.horizontal, 5).padding(.vertical, 3)
-                    .overlay(RoundedRectangle(cornerRadius: 2).stroke(.white.opacity(camera.rawEnabled ? 0.75 : 0.25), lineWidth: 0.6))
-                    .frame(minWidth: 44, minHeight: 34)
+    private var luxControlBar: some View {
+        HStack(spacing:16) {
+            Button { showControls = true } label: {
+                VStack(spacing:5) { Image(systemName:"dial.low").font(.system(size:20,weight:.light)); Text(camera.manualExposure ? "M" : "AUTO").font(.system(size:9,weight:.medium,design:.monospaced)) }.frame(width:48,height:52)
+            }.accessibilityLabel("ISO, tốc độ, WB và lấy nét thủ công").disabled(camera.capturing || camera.sequenceActive || camera.recordingBusy)
+            if camera.mode == .portrait {
+                LuxDial(value:$camera.options.portraitBlur,range:0...1,step:0.05,title:"BOKEH",formatted:"\(Int(camera.options.portraitBlur*100))%")
+                    .disabled(camera.capturing || camera.sequenceActive)
+            } else {
+                LuxDial(value:Binding(get:{ Double(camera.exposureBias) },set:{ camera.exposureBias = Float($0); camera.setEV(Float($0)) }),range:Double(camera.minEV)...Double(camera.maxEV),step:0.1,title:"EV",formatted:String(format:"%+.1f",camera.exposureBias))
+                    .disabled(camera.manualExposure || camera.aeLocked || !camera.running || camera.capturing || camera.sequenceActive)
             }
-            .disabled(!camera.supportsRaw || camera.imported || camera.capturing || camera.mode.isMovie || camera.mode.computational || camera.options.sequence == .bracket)
-            .accessibilityLabel(camera.rawEnabled ? "Tắt RAW" : "Bật RAW nếu camera hỗ trợ")
-            Button { camera.options.grid = camera.options.grid == .off ? .thirds : .off } label: {
-                Image(systemName: "grid").font(.system(size: 15, weight: .light))
-                    .foregroundStyle(camera.options.grid != .off ? cameraWhite : .white.opacity(0.4))
-                    .frame(width: 43, height: 34)
-            }.accessibilityLabel("Lưới bố cục")
-            Button { camera.options.timerSeconds = camera.options.timerSeconds == 0 ? 3 : camera.options.timerSeconds == 3 ? 10 : 0 } label: {
-                HStack(spacing: 3) {
-                    Image(systemName: "timer").font(.system(size: 15, weight: .light))
-                    if camera.options.timerSeconds > 0 { Text("\(camera.options.timerSeconds)").font(.system(size: 8, design: .monospaced)) }
-                }.foregroundStyle(camera.options.timerSeconds > 0 ? cameraWhite : .white.opacity(0.4))
-                    .frame(width: 43, height: 34)
-            }.accessibilityLabel(camera.options.timerSeconds == 0 ? "Bật hẹn giờ" : "Hẹn giờ \(camera.options.timerSeconds) giây")
-            Menu {
-                Button("4:3") { color.ratio = 3.0 / 4; update() }
-                Button("3:2") { color.ratio = 2.0 / 3; update() }
-                Button("1:1") { color.ratio = 1; update() }
-                Button("16:9") { color.ratio = 9.0 / 16; update() }
-            } label: {
-                Text(ratioName).font(.system(size: 9, weight: .medium, design: .monospaced))
-                    .frame(width: 38, height: 34)
-            }.accessibilityLabel("Tỷ lệ ảnh \(ratioName)").disabled(camera.mode.isMovie || camera.capturing || camera.recording || camera.sequenceActive)
-        }
-        .foregroundStyle(.white.opacity(0.7)).padding(.horizontal, 21).frame(height: 34)
+            Button { showLooks = true } label: {
+                VStack(spacing:5) { Image(systemName:"camera.filters").font(.system(size:20,weight:.light)); Text(camera.mode.isMovie ? "CAMERA" : color.look.name.uppercased()).font(.system(size:9,weight:.medium,design:.monospaced)).lineLimit(1).minimumScaleFactor(0.6) }.frame(width:76,height:52)
+            }.accessibilityLabel("Chọn màu và preset film").disabled(camera.mode.isMovie || camera.capturing || camera.sequenceActive)
+        }.padding(.horizontal,20).padding(.top,10).padding(.bottom,4)
+    }
+    private var modeDrawer: some View {
+        VStack(alignment:.leading,spacing:20) {
+            drawerHeader(eyebrow:"CAPTURE",title:"Chế độ",close:{ showModes = false })
+            LazyVGrid(columns:Array(repeating:GridItem(.flexible(),spacing:10),count:3),spacing:10) {
+                ForEach(ShootingMode.allCases) { mode in
+                    Button { camera.changeMode(mode); showModes = false } label: {
+                        VStack(spacing:8) { Text(mode == .photo ? "P" : mode == .pro ? "M" : mode == .portrait ? "A" : mode.rawValue.prefix(1).uppercased()).font(.system(size:23,weight:.light,design:.monospaced)); Text(mode.rawValue).font(.system(size:9,weight:.medium,design:.monospaced)) }
+                            .frame(maxWidth:.infinity).frame(height:64).foregroundStyle(camera.mode == mode ? .white : .gray)
+                            .background(.white.opacity(camera.mode == mode ? 0.1 : 0.03),in:RoundedRectangle(cornerRadius:12))
+                            .overlay(RoundedRectangle(cornerRadius:12).stroke(camera.mode == mode ? cameraRed : .clear,lineWidth:1))
+                    }
+                }
+            }
+        }.padding(24).foregroundStyle(.white)
     }
 
     private var viewfinder: some View {
@@ -237,8 +220,6 @@ struct CameraScreen: View {
                         VStack { Text(target.label).font(.system(size: 9, weight: .semibold, design: .monospaced)).foregroundStyle(.green).padding(.top, 45); Spacer() }.allowsHitTesting(false)
                     }
                     if camera.options.histogram && !camera.imported && camera.preview != nil { VStack { HStack { Spacer(); ProHistogram(analysis: camera.analysis) }; Spacer() }.padding(.top, 59).padding(.trailing, 18).allowsHitTesting(false) }
-                    RangefinderCorners().stroke(.white.opacity(0.45), lineWidth: 0.7)
-                        .padding(11).allowsHitTesting(false)
                     if let focusPoint {
                         FocusReticle().stroke(cameraRed, lineWidth: 1)
                             .frame(width: 55, height: 55)
@@ -293,19 +274,11 @@ struct CameraScreen: View {
     private func viewfinderOverlays(width: CGFloat) -> some View {
         VStack(spacing: 0) {
             HStack {
-                Button { showLooks = true } label: {
-                    HStack(spacing: 6) {
-                        Rectangle().fill(cameraRed).frame(width: 4, height: 4)
-                        Text(camera.mode.isMovie ? (camera.selectedVideo?.title ?? "VIDEO") : color.look.name.uppercased()).font(.system(size: 8, weight: .medium, design: .monospaced)).tracking(1)
-                    }.padding(8).background(.black.opacity(0.17), in: RoundedRectangle(cornerRadius: 3))
-                }.accessibilityLabel("Chọn chất ảnh").disabled(camera.mode.isMovie)
+                Text(camera.imported ? "EDIT" : camera.mode.rawValue).font(.system(size:9,weight:.medium,design:.monospaced)).tracking(1)
                 Spacer()
-                Text("GỐC").font(.system(size: 8, weight: .medium)).tracking(0.4)
-                    .padding(.horizontal, 10).frame(height: 30)
-                    .background(.black.opacity(0.22), in: RoundedRectangle(cornerRadius: 3))
-                    .overlay(RoundedRectangle(cornerRadius: 3).stroke(.white.opacity(0.25), lineWidth: 0.5))
-                    .onLongPressGesture(minimumDuration: 0.05, pressing: { camera.setCompare($0) }, perform: {})
-                    .accessibilityLabel("Giữ để xem ảnh gốc")
+                Text("GỐC").font(.system(size:9,weight:.medium)).padding(8).background(.black.opacity(0.25),in:Capsule())
+                    .onLongPressGesture(minimumDuration:0.05,pressing:{ camera.setCompare($0) },perform:{})
+                    .accessibilityLabel("Giữ để so sánh ảnh gốc")
             }
             Spacer(minLength: 8)
             if !camera.sequenceProgress.isEmpty { Text(camera.sequenceProgress).font(.system(size: 18, weight: .medium, design: .monospaced)).padding(10).background(.black.opacity(0.5), in: Capsule()) }
@@ -382,13 +355,6 @@ struct CameraScreen: View {
 
     private func captureDeck(compact: Bool) -> some View {
         VStack(spacing: compact ? 8 : 12) {
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 23) {
-                    ForEach(ShootingMode.allCases) { mode in
-                        modeButton(mode.rawValue, selected: camera.mode == mode) { camera.changeMode(mode) }
-                    }
-                }.padding(.horizontal, 23)
-            }.frame(height: 32).disabled(camera.recording || camera.recordingBusy || camera.capturing || camera.sequenceActive || shutterPending)
             HStack {
                 Button { showGallery = true } label: {
                     ZStack {
@@ -404,9 +370,9 @@ struct CameraScreen: View {
                 Spacer()
                 Button { timedCapture() } label: {
                     ZStack {
-                        Circle().stroke(.white.opacity(0.85), lineWidth: 1.5)
+                        Circle().stroke(.white.opacity(0.3), lineWidth: 1)
                         if camera.recording || camera.sequenceActive { RoundedRectangle(cornerRadius: 5).fill(cameraRed).frame(width: 27, height: 27) }
-                        else { Circle().fill(camera.mode.isMovie ? cameraRed : cameraWhite).padding(6) }
+                        else { Circle().fill(camera.mode.isMovie ? cameraRed : cameraWhite).padding(4) }
                         if camera.capturing || camera.recordingBusy { ProgressView().tint(.black) }
                         if shutterPending { Text("\(max(1, countdown))").font(.system(size: 20, weight: .medium, design: .monospaced)).foregroundStyle(.black) }
                     }.frame(width: compact ? 68 : 76, height: compact ? 68 : 76)
@@ -415,80 +381,65 @@ struct CameraScreen: View {
                 .disabled((camera.capturing && !camera.sequenceActive) || camera.changingLens || camera.recordingBusy || camera.adjustingExposure || (!camera.running && !camera.imported) || (camera.mode.isMovie && camera.selectedVideo == nil))
                 .accessibilityLabel(camera.recording || camera.sequenceActive ? "Dừng" : camera.mode.isMovie ? "Quay video" : camera.imported ? "Lưu ảnh đã chỉnh màu" : "Chụp ảnh")
                 Spacer()
-                Button { showControls = true } label: {
-                    VStack(spacing: 6) {
-                        Image(systemName: "slider.horizontal.3").font(.system(size: 21, weight: .light))
-                        Text(camera.manualExposure ? "MANUAL" : "PRO").font(.system(size: 7, weight: .medium, design: .monospaced)).tracking(1.2)
-                    }.frame(width: 62, height: 70).foregroundStyle(camera.manualExposure ? cameraRed : .white.opacity(0.75))
-                }.accessibilityLabel("Điều khiển camera phần cứng").disabled(camera.recordingBusy || camera.capturing || camera.sequenceActive)
+                Button { showModes = true } label: {
+                    VStack(spacing:3) {
+                        Text(camera.mode == .photo ? "P" : camera.mode == .pro ? "M" : camera.mode == .portrait ? "A" : camera.mode.rawValue).font(.system(size:camera.mode.rawValue.count > 4 ? 12 : 23,weight:.light,design:.monospaced))
+                        Text("MODE").font(.system(size:9,weight:.medium,design:.monospaced))
+                    }.frame(width:60,height:60).overlay(RoundedRectangle(cornerRadius:15).stroke(.white.opacity(0.2),lineWidth:1))
+                }.accessibilityLabel("Chọn chế độ chụp").disabled(camera.recording || camera.recordingBusy || camera.capturing || camera.sequenceActive || shutterPending || camera.imported)
             }.padding(.horizontal, 28)
         }
         .padding(.top, compact ? 5 : 10).padding(.bottom, compact ? 8 : 15)
         .background(cameraBlack)
     }
 
-    private var colorBar: some View {
-        HStack(spacing: 0) {
-            Button { showLooks = true } label: {
-                HStack(spacing: 9) {
-                    HStack(spacing: -3) {
-                        ForEach(0..<3) { index in Circle().fill(palette(for: color.look)[index]).frame(width: 12, height: 12).overlay(Circle().stroke(cameraBlack, lineWidth: 1)) }
-                    }
-                    Text(color.look.name).font(.system(size: 11, weight: .medium))
-                    Image(systemName: "chevron.up").font(.system(size: 8, weight: .medium)).foregroundStyle(.white.opacity(0.4))
-                }.frame(height: 43)
-            }.accessibilityLabel("Chọn chất ảnh \(color.look.name)").disabled(camera.mode.isMovie)
-            Spacer()
-            Button { showPresets = true } label: { Image(systemName: "bookmark").font(.system(size: 17)).frame(width: 42, height: 43) }.accessibilityLabel("Preset cá nhân").disabled(camera.recording || camera.capturing)
-            Button { showColor = true } label: {
-                HStack(spacing: 6) {
-                    Image(systemName: "dial.low").font(.system(size: 14, weight: .light))
-                    Text("Tinh chỉnh").font(.system(size: 10))
-                }.foregroundStyle(.white.opacity(0.55)).frame(height: 43)
-            }.accessibilityLabel("Tinh chỉnh màu và khung ảnh").disabled(camera.mode.isMovie)
-        }.padding(.horizontal, 25)
-            .overlay(alignment: .top) { Rectangle().fill(.white.opacity(0.07)).frame(height: 0.5).padding(.horizontal, 20) }
-    }
-
     private var looksDrawer: some View {
-        ScrollView(showsIndicators: false) {
-        VStack(alignment: .leading, spacing: 23) {
-            drawerHeader(eyebrow: "THE COLOR OF A MOMENT", title: "Chất ảnh", close: { showLooks = false })
-            LazyVGrid(columns: [GridItem(.flexible(), spacing: 11), GridItem(.flexible(), spacing: 11)], spacing: 11) {
-                ForEach(Array(Look.all.enumerated()), id: \.element.id) { index, look in
-                    let selected = color.look == look
-                    Button {
-                        color.look = look; update()
-                    } label: {
-                        VStack(alignment: .leading, spacing: 13) {
-                            HStack {
-                                Text(String(format: "%02d", index + 1)).font(.system(size: 9, design: .monospaced)).foregroundStyle(.white.opacity(0.3))
-                                Spacer()
-                                if selected { Image(systemName: "checkmark.circle.fill").font(.system(size: 13)).foregroundStyle(cameraRed) }
-                            }
-                            HStack(spacing: 4) {
-                                ForEach(0..<3) { n in RoundedRectangle(cornerRadius: 2).fill(palette(for: look)[n]).frame(height: 18) }
-                            }
-                            VStack(alignment: .leading, spacing: 4) {
-                                Text(look.name).font(.system(size: 12, weight: .medium)).foregroundStyle(cameraWhite)
-                                Text(look.subtitle).font(.system(size: 6, weight: .medium, design: .monospaced)).tracking(0.7).foregroundStyle(.white.opacity(0.35))
-                            }
-                        }.padding(13).frame(maxWidth: .infinity, alignment: .leading)
-                            .background(Color.white.opacity(selected ? 0.065 : 0.025), in: RoundedRectangle(cornerRadius: 10))
-                            .overlay(RoundedRectangle(cornerRadius: 10).stroke(selected ? cameraRed.opacity(0.7) : Color.white.opacity(0.08), lineWidth: 0.7))
-                    }.buttonStyle(.plain).accessibilityLabel("Chất ảnh \(look.name)").accessibilityAddTraits(selected ? .isSelected : [])
-                }
+        VStack(alignment:.leading,spacing:22) {
+            drawerHeader(eyebrow:"LOOKS / FILM",title:"Chất ảnh",close:{ showLooks = false })
+            ScrollViewReader { proxy in
+                ScrollView(.horizontal,showsIndicators:false) {
+                    HStack(spacing:12) {
+                        ForEach(Look.all) { look in
+                            Button { selectLook(look) } label: {
+                                VStack(alignment:.leading,spacing:9) {
+                                    ZStack {
+                                        if let thumbnail = camera.lookThumbnails[look.id] { Image(uiImage:thumbnail).resizable().scaledToFill() }
+                                        else { LinearGradient(colors:palette(for:look),startPoint:.topLeading,endPoint:.bottomTrailing).overlay { Image(systemName:"camera.aperture").font(.system(size:28,weight:.ultraLight)).foregroundStyle(.white.opacity(0.65)) } }
+                                    }.frame(width:100,height:128).clipped().clipShape(RoundedRectangle(cornerRadius:8))
+                                        .overlay(RoundedRectangle(cornerRadius:8).stroke(color.look.id == look.id ? cameraRed : .clear,lineWidth:2))
+                                    Text(look.name).font(.system(size:11,weight:.medium,design:.monospaced)).foregroundStyle(color.look.id == look.id ? .white : .gray)
+                                    Circle().fill(color.look.id == look.id ? cameraRed : .clear).frame(width:4,height:4)
+                                }
+                            }.buttonStyle(.plain).id(look.id).accessibilityAddTraits(color.look.id == look.id ? .isSelected : [])
+                        }
+                    }.padding(.vertical,3)
+                }.onAppear { proxy.scrollTo(color.look.id,anchor:.center) }
             }
-            Spacer(minLength: 0)
-        }.padding(.horizontal, 24).padding(.top, 30).padding(.bottom, 20)
-            .foregroundStyle(cameraWhite)
-        }
+            Text(FilmProfile.all[color.look.id]?.caption ?? color.look.subtitle).font(.system(size:13)).foregroundStyle(.white.opacity(0.75))
+            colorSlider("Cường độ",value:$color.strength)
+            HStack {
+                Button { showLooks = false; DispatchQueue.main.asyncAfter(deadline:.now()+0.3) { showColor = true } } label: { Label("Hạt / màu / khung",systemImage:"slider.horizontal.3") }
+                Spacer()
+                Button { showLooks = false; DispatchQueue.main.asyncAfter(deadline:.now()+0.3) { showPresets = true } } label: { Image(systemName:"bookmark") }
+            }.font(.system(size:12)).foregroundStyle(.white).frame(height:44)
+            Text("Mô phỏng màu film do G.LENS tự xây dựng. Không phải LUT chính hãng hoặc bản quét film đã đo chuẩn.").font(.system(size:10)).foregroundStyle(.gray)
+        }.padding(24).foregroundStyle(.white)
+    }
+    private func selectLook(_ look: Look) {
+        color.look = look
+        if let profile = FilmProfile.all[look.id] { color.grain = profile.grain; color.strength = 0.9; color.vignette = 0.12 }
+        UISelectionFeedbackGenerator().selectionChanged(); update()
     }
 
     private var colorDrawer: some View {
         ScrollView(showsIndicators: false) {
             VStack(alignment: .leading, spacing: 25) {
                 drawerHeader(eyebrow: "MAKE IT YOURS", title: "Tinh chỉnh", close: { showColor = false })
+                HStack {
+                    PhotosPicker(selection:$picker,matching:.images) { Label("Mở ảnh",systemImage:"photo") }
+                    Spacer()
+                    Button { showColor = false; DispatchQueue.main.asyncAfter(deadline:.now()+0.3) { showFileImport = true } } label: { Label("Mở DNG / Tệp",systemImage:"doc") }
+                }.font(.system(size:12)).disabled(camera.capturing || camera.sequenceActive || camera.recording)
                 VStack(spacing: 24) {
                     colorSlider("Cường độ màu", value: $color.strength)
                     colorSlider("Hạt ảnh", value: $color.grain)
@@ -583,7 +534,12 @@ struct CameraScreen: View {
         case "vibrant": return [Color(red: 0.21, green: 0.46, blue: 0.40), Color(red: 0.78, green: 0.33, blue: 0.23), Color(red: 0.86, green: 0.72, blue: 0.42)]
         case "m9": return [Color(red: 0.22, green: 0.35, blue: 0.33), Color(red: 0.65, green: 0.31, blue: 0.25), Color(red: 0.75, green: 0.64, blue: 0.47)]
         case "m3": return [Color(white: 0.20), Color(white: 0.45), Color(white: 0.77)]
-        case "gold": return [Color(red: 0.40, green: 0.43, blue: 0.31), Color(red: 0.70, green: 0.50, blue: 0.28), Color(red: 0.87, green: 0.74, blue: 0.51)]
+        case "hp5": return [Color(white:0.12),Color(white:0.45),Color(white:0.84)]
+        case "cine800": return [Color(red:0.1,green:0.3,blue:0.4),Color(red:0.6,green:0.24,blue:0.2),Color(red:0.85,green:0.68,blue:0.45)]
+        case "portra400": return [Color(red:0.35,green:0.42,blue:0.38),Color(red:0.72,green:0.56,blue:0.48),Color(red:0.9,green:0.82,blue:0.72)]
+        case "c200": return [Color(red:0.17,green:0.35,blue:0.29),Color(red:0.62,green:0.63,blue:0.46),Color(red:0.78,green:0.83,blue:0.77)]
+        case "ektar100": return [Color(red:0.15,green:0.3,blue:0.55),Color(red:0.75,green:0.22,blue:0.17),Color(red:0.92,green:0.74,blue:0.38)]
+        case "gold", "gold200": return [Color(red: 0.40, green: 0.43, blue: 0.31), Color(red: 0.70, green: 0.50, blue: 0.28), Color(red: 0.87, green: 0.74, blue: 0.51)]
         case "noir": return [Color(white: 0.08), Color(white: 0.30), Color(white: 0.92)]
         default: return [Color(red: 0.22, green: 0.30, blue: 0.26), Color(red: 0.62, green: 0.34, blue: 0.27), Color(red: 0.73, green: 0.68, blue: 0.54)]
         }
