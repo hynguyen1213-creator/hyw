@@ -54,6 +54,25 @@ enum AdvancedChecks {
             notes.append("Night mean absolute error: \(error)")
             notes.append("Night truth \(Array(truth.prefix(12))), out \(Array(out.prefix(12)))")
         } else { checks["Night registers both noisy frames"] = false }
+        // Regression: periodic sensor-pattern noise must not induce a false shift.
+        var stripedA = original, stripedB = original
+        for i in 0..<original.count where i%4 != 3 {
+            let n = (i/4)%2 == 0 ? 10 : -10
+            stripedA[i] = UInt8(max(0,min(255,Int(original[i])+n)))
+            stripedB[i] = UInt8(max(0,min(255,Int(original[i])-n)))
+        }
+        let sa = ImageRegistration.image(stripedA,width:256,height:256)
+        let sb = ImageRegistration.image(stripedB,width:256,height:256)
+        if let result = ImageFusion.fuse([sa,sb],kind:.night,context:context) {
+            let rect = CGRect(x:16,y:16,width:224,height:224)
+            let output = ImageRegistration.pixels(result.image,bounds:rect,context:context)
+            let expected = ImageRegistration.pixels(first,bounds:rect,context:context)
+            var error = 0.0
+            for i in output.indices where i%4 != 3 { error += abs(Double(output[i])-Double(expected[i])) }
+            error /= Double(224*224*3)
+            checks["Night rejects false shift from periodic noise"] = result.used == 2 && error < 3
+            notes.append("Periodic noise error: \(error)")
+        } else { checks["Night rejects false shift from periodic noise"] = false }
         let darker = first.applyingFilter("CIExposureAdjust",parameters:[kCIInputEVKey:-0.6])
         let lighter = first.applyingFilter("CIExposureAdjust",parameters:[kCIInputEVKey:0.6])
         if let result = ImageFusion.fuse([darker,first,lighter],kind:.hdr,context:context) {

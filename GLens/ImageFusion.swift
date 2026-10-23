@@ -35,7 +35,7 @@ enum ImageRegistration {
             let t = observation.alignmentTransform
             guard t.tx.isFinite, t.ty.isFinite else { return nil }
             // Validate against image content, including the transform direction.
-            let candidate = [t, t.inverted()].map { value in (value, correlation(a, b.transformed(by: value), context: context)) }.min { $0.1 < $1.1 }
+            let candidate = [CGAffineTransform.identity, t, t.inverted()].map { value in (value, correlation(a, b.transformed(by: value), context: context)) }.min { $0.1 < $1.1 }
             guard let (best, error) = candidate, error < 0.28,
                   abs(best.tx) < a.extent.width * maxFraction,
                   abs(best.ty) < a.extent.height * maxFraction else { return nil }
