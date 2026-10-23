@@ -13,7 +13,7 @@ extension CameraController {
         }
     }
     func updateOptions() {
-        if options.sequence == .bracket { rawEnabled = false }
+        if options.sequence == .bracket || mode.computational { rawEnabled = false }
         options.save(); let value = options
         locked { renderOptions = value }
         guard !capturing, !recording, !recordingBusy, !sequenceActive else { return }
@@ -21,7 +21,7 @@ extension CameraController {
     }
     func applyPhotoResolution(_ device: AVCaptureDevice) {
         let choices = device.activeFormat.supportedMaxPhotoDimensions.sorted { Int64($0.width) * Int64($0.height) < Int64($1.width) * Int64($1.height) }
-        let maximum = locked { renderOptions.maximumResolution && renderOptions.sequence != .bracket }
+        let maximum = locked { renderOptions.maximumResolution && renderOptions.sequence != .bracket && !renderMode.computational }
         guard let size = maximum ? choices.last : (choices.last(where: { Int64($0.width) * Int64($0.height) <= 13_000_000 }) ?? choices.first) else { return }
         photoOutput.maxPhotoDimensions = size
         DispatchQueue.main.async { self.photoResolution = String(format: "%.1f MP", Double(size.width) * Double(size.height) / 1_000_000) }
@@ -75,7 +75,13 @@ extension CameraController {
     func currentColor() -> ColorSettings { locked { color } }
     func shutterAction() {
         if recording || recordingBusy { stopRecording(); return }
+        if mode == .panorama && sequenceActive { finishPanorama(); return }
         if sequenceActive { cancelSequence(); return }
+        if imported { capture(); return }
+        if mode == .hdr { capture(purpose: .hdr); return }
+        if mode == .night { startNight(); return }
+        if mode == .panorama { startPanorama(); return }
+        if mode == .document { capture(purpose: .document); return }
         if mode.isMovie { startRecording(); return }
         if mode == .longExposure { startLongExposure(); return }
         if options.sequence == .single || options.sequence == .bracket || imported { capture(); return }
@@ -96,7 +102,7 @@ extension CameraController {
             }
         }
     }
-    func cancelSequence() { sequenceTask?.cancel(); sequenceTask = nil; sequenceActive = false; sequenceProgress = "" }
+    func cancelSequence() { cancelAdvanced(); sequenceTask?.cancel(); sequenceTask = nil; sequenceActive = false; sequenceProgress = "" }
     func startLongExposure() {
         guard !capturing, running, !changingLens else { return }
         capturing = true; let configuration = options
@@ -153,7 +159,7 @@ extension CameraController {
     func changeMode(_ newMode: ShootingMode) {
         guard !capturing, !recording, !recordingBusy, !sequenceActive, !changingLens, !imported else { return }
         changingLens = true; mode = newMode
-        if newMode == .longExposure { rawEnabled = false }
+        if newMode.computational { rawEnabled = false }
         locked { renderMode = newMode }
         sessionQueue.async {
             defer { DispatchQueue.main.async { self.changingLens = false } }

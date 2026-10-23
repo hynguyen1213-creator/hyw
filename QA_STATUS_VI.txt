@@ -1,3 +1,14 @@
+G.LENS Pro 0.4 — CHƯA BUILD / CHƯA CÓ IPA MỚI
+
+Mã thay đổi đã được rà soát cú pháp Swift bằng tree-sitter, plist,
+tham chiếu project và cú pháp shell. Đây không phải biên dịch Xcode.
+Các bài test ImageFusion/Panorama/Tracker mới CHƯA CHẠY.
+Auto-review từ chối upload source mới vào repo GitHub công khai vì
+chưa xác minh được quyền công bố payload này. Chưa thử lại upload.
+Camera vật lý chưa được kiểm thử. Không khẳng định tương đương 1:1.
+
+--- LỊCH SỬ BẢN 0.3, KHÔNG ÁP CHO 0.4 ---
+
 G.LENS Pro 0.3 — trạng thái kiểm thử
 
 Build iPhoneOS thành công, native Mach-O ARM64, iOS 17+.

@@ -5,6 +5,7 @@ import UIKit
 import Combine
 import ImageIO
 import Vision
+import UniformTypeIdentifiers
 
 struct LensDevice: Identifiable { let id: String; let title: String; let device: AVCaptureDevice }
 struct CaptureJob {
@@ -19,6 +20,7 @@ struct CaptureJob {
     var portrait = false
     var frames: [Data] = []
     var frameMetadata: [String] = []
+    var purpose = CapturePurpose.normal
 }
 final class CameraController: NSObject, ObservableObject, AVCaptureVideoDataOutputSampleBufferDelegate, AVCapturePhotoCaptureDelegate {
     @Published var preview: UIImage?
@@ -81,6 +83,13 @@ final class CameraController: NSObject, ObservableObject, AVCaptureVideoDataOutp
     @Published var toast = ""
     @Published var presets = CameraPreset.load()
     @Published var colorRevision = 0
+    @Published var trackingTarget: TrackingTarget?
+    let subjectTracker = SubjectTracker()
+    var lastTrackingPoint: CGPoint?
+    var advancedID: UUID?
+    var nightFrames: [Data] = []
+    var stackDeviceState: StackDeviceState?
+    var panorama: PanoramaStitcher?
     let movieOutput = AVCaptureMovieFileOutput()
     let analyzer = FrameAnalyzer()
     var renderOptions = ProOptions.restored()
@@ -106,6 +115,7 @@ final class CameraController: NSObject, ObservableObject, AVCaptureVideoDataOutp
     let lock = NSLock()
     var color = ColorSettings()
     var importedImage: CIImage?
+    var importedRAW: Data?
     var input: AVCaptureDeviceInput?
     var previewDevice: AVCaptureDevice?
     var sensorSize = CGSize(width: 3, height: 4)
@@ -122,7 +132,7 @@ final class CameraController: NSObject, ObservableObject, AVCaptureVideoDataOutp
         captures = CaptureStore.shared.all(); lastCapture = captures.first
         if let first = captures.first { lastThumbnail = CaptureStore.shared.thumbnail(first.url) }
         observers.append(NotificationCenter.default.addObserver(forName: .AVCaptureSessionWasInterrupted, object: session, queue: .main) { [weak self] _ in
-            self?.cancelSequence(); self?.stopRecording(); self?.clearExposureWait(); self?.interrupted = true; self?.message = "Camera đang bị gián đoạn bởi hệ thống hoặc ứng dụng khác."
+            self?.cancelSequence(); self?.stopRecording(); self?.clearExposureWait(); self?.cancelLongExposure(); self?.interrupted = true; self?.message = "Camera đang bị gián đoạn bởi hệ thống hoặc ứng dụng khác."
         })
         observers.append(NotificationCenter.default.addObserver(forName: .AVCaptureSessionInterruptionEnded, object: session, queue: .main) { [weak self] _ in
             self?.interrupted = false; self?.start()
@@ -205,6 +215,8 @@ final class CameraController: NSObject, ObservableObject, AVCaptureVideoDataOutp
         publishCapabilities(camera)
     }
     func configureOutputs(_ device: AVCaptureDevice) {
+        videoQueue.async { self.subjectTracker.reset() }
+        DispatchQueue.main.async { self.trackingTarget = nil; self.lastTrackingPoint = nil }
         exposureRevision &+= 1; exposureInFlight = false
         do {
             try device.lockForConfiguration()
@@ -370,18 +382,31 @@ final class CameraController: NSObject, ObservableObject, AVCaptureVideoDataOutp
         }
     }
     func importPhoto(_ data: Data) {
-        guard !recording, !recordingBusy, !sequenceActive, !capturing else { return }
-        guard let image = CIImage(data: data, options: [.applyOrientationProperty: true]) else { notify("Không đọc được ảnh này."); return }
-        locked { importedImage = image }
-        sessionQueue.async { if self.session.isRunning { self.session.stopRunning() } }
-        imported = true; running = false
-        photoQueue.async { self.renderImported(image) }
+        guard !recording, !recordingBusy, !sequenceActive, !capturing, !changingLens else { return }
+        changingLens = true
+        photoQueue.async {
+            let type = CGImageSourceCreateWithData(data as CFData, nil).flatMap { CGImageSourceGetType($0) }.map { $0 as String }
+            let isRAW = type.flatMap { UTType($0) }?.conforms(to: .rawImage) == true
+            let image: CIImage?
+            if isRAW { image = CIRAWFilter(imageData: data, identifierHint: type)?.outputImage }
+            else { image = CIImage(data: data, options: [.applyOrientationProperty: true]) }
+            guard let image else {
+                self.notify(isRAW ? "iOS chưa giải mã được RAW này. Hãy thử DNG từ iPhone hoặc JPEG/HEIF." : "Không đọc được ảnh này.")
+                DispatchQueue.main.async { self.changingLens = false }; return
+            }
+            // Preserve only real DNG under the .dng extension; never relabel NEF/CR3.
+            let dng = type == "com.adobe.raw-image" ? data : nil
+            self.locked { self.importedImage = image; self.importedRAW = dng }
+            self.sessionQueue.async { if self.session.isRunning { self.session.stopRunning() } }
+            DispatchQueue.main.async { self.imported = true; self.running = false; self.changingLens = false; self.trackingTarget = nil }
+            self.renderImported(image)
+        }
     }
     func renderImported(_ image: CIImage) {
         let settings = locked { color }
         if let result = engine.uiImage(engine.process(image, settings: settings, preview: true)) { DispatchQueue.main.async { self.preview = result } }
     }
-    func returnToCamera() { locked { importedImage = nil }; imported = false; authorizeAndStart() }
+    func returnToCamera() { locked { importedImage = nil; importedRAW = nil }; imported = false; authorizeAndStart() }
     func captureOutput(_ output: AVCaptureOutput, didOutput sampleBuffer: CMSampleBuffer, from connection: AVCaptureConnection) {
         guard let buffer = CMSampleBufferGetImageBuffer(sampleBuffer), locked({ importedImage == nil }) else { return }
         let now = ProcessInfo.processInfo.systemUptime
@@ -392,6 +417,15 @@ final class CameraController: NSObject, ObservableObject, AVCaptureVideoDataOutp
                 return (color, renderOptions, renderMode)
             }
             frameRecorder?.append(source, now: now)
+            if let panorama {
+                let finished = panorama.append(source, now: now, context: engine.context)
+                let hint = panorama.hint
+                DispatchQueue.main.async {
+                    if self.mode == .panorama && self.sequenceActive && !self.capturing { self.sequenceProgress = hint; if finished { self.finishPanorama() } }
+                }
+            }
+            let tracking = subjectTracker.update(engine.crop(source, ratio: state.0.ratio), mode: state.1.tracking, now: now)
+            if tracking.updated { DispatchQueue.main.async { self.applyTracking(tracking.target) } }
             if let accumulator {
                 if accumulator.append(source, now: now, context: engine.context) {
                     self.accumulator = nil
@@ -421,16 +455,18 @@ final class CameraController: NSObject, ObservableObject, AVCaptureVideoDataOutp
             }
         }
     }
-    func capture() {
+    func capture(purpose: CapturePurpose = .normal) {
         guard !capturing, !changingLens else { return }
         capturing = true
         let settings = locked { color }
         if let importedImage = locked({ importedImage }) {
             let options = self.options
-            photoQueue.async { self.finishImage(importedImage, settings: settings, raw: nil, metadata: "ẢNH NHẬP", options: options) }; return
+            let raw = locked { importedRAW }
+            photoQueue.async { self.finishImage(importedImage, settings: settings, raw: raw, metadata: raw == nil ? "ẢNH NHẬP" : "DNG DEVELOPED", options: options) }; return
         }
-        let requestedRAW = rawEnabled
-        let options = self.options
+        let requestedRAW = rawEnabled && purpose == .normal
+        var options = self.options
+        if purpose != .normal { options.sequence = purpose == .hdr ? .bracket : .single; options.flash = 0 }
         let portrait = mode == .portrait
         sessionQueue.async {
             guard !self.exposureInFlight else {
@@ -439,6 +475,10 @@ final class CameraController: NSObject, ObservableObject, AVCaptureVideoDataOutp
             }
             guard self.session.isRunning, let device = self.input?.device else {
                 self.notify("Bật camera trước khi chụp."); DispatchQueue.main.async { self.capturing = false }; return
+            }
+            if purpose == .hdr && self.photoOutput.maxBracketedCapturePhotoCount < 3 {
+                self.notify("Camera này chưa hỗ trợ chuỗi bracket 3 ảnh cho HDR.")
+                DispatchQueue.main.async { self.capturing = false }; return
             }
             let rawFormat = self.photoOutput.availableRawPhotoPixelFormatTypes.first(where: { AVCapturePhotoOutput.isAppleProRAWPixelFormat($0) }) ?? self.photoOutput.availableRawPhotoPixelFormatTypes.first
             let photoSettings: AVCapturePhotoSettings
@@ -465,7 +505,7 @@ final class CameraController: NSObject, ObservableObject, AVCaptureVideoDataOutp
             let duration = CMTimeGetSeconds(device.exposureDuration)
             let shutter = duration < 1 ? "1/\(Int((1 / max(duration, 0.000001)).rounded()))s" : String(format: "%.1fs", duration)
             let metadata = String(format: "ISO %.0f  %@  %.1f×", device.iso, shutter, device.videoZoomFactor)
-            self.jobs[photoSettings.uniqueID] = CaptureJob(color: settings, metadata: metadata, requestedRAW: requestedRAW && options.sequence != .bracket, zoom: device.videoZoomFactor, options: options, portrait: portrait)
+            self.jobs[photoSettings.uniqueID] = CaptureJob(color: settings, metadata: metadata, requestedRAW: requestedRAW && options.sequence != .bracket, zoom: device.videoZoomFactor, options: options, portrait: portrait, purpose: purpose)
             self.photoOutput.capturePhoto(with: photoSettings, delegate: self)
         }
     }
@@ -494,6 +534,9 @@ final class CameraController: NSObject, ObservableObject, AVCaptureVideoDataOutp
     func photoOutput(_ output: AVCapturePhotoOutput, didFinishCaptureFor resolvedSettings: AVCaptureResolvedPhotoSettings, error: Error?) {
         sessionQueue.async {
             guard let job = self.jobs.removeValue(forKey: resolvedSettings.uniqueID) else { return }
+            if case .night(let id) = job.purpose {
+                DispatchQueue.main.async { self.acceptNight(job.jpeg, id: id) }; return
+            }
             guard let jpeg = job.jpeg, let image = CIImage(data: jpeg, options: [.applyOrientationProperty: true]) else {
                 self.notify(error?.localizedDescription ?? job.error ?? "Không nhận được ảnh từ camera.")
                 DispatchQueue.main.async { self.capturing = false }; return
@@ -501,7 +544,17 @@ final class CameraController: NSObject, ObservableObject, AVCaptureVideoDataOutp
             let warning = [error?.localizedDescription, job.error, job.requestedRAW && job.raw == nil ? "DNG yêu cầu chưa được camera trả về; JPEG vẫn được giữ." : nil].compactMap { $0 }.joined(separator: " ")
             if job.options.sequence == .bracket && job.frames.count != 3 { self.notify("Camera chỉ trả về \(job.frames.count)/3 ảnh bracket. Các ảnh nhận được vẫn được giữ.") }
             self.photoQueue.async {
-                if job.frames.count > 1 {
+                if job.purpose == .hdr {
+                    let images = job.frames.compactMap { CIImage(data: $0, options: [.applyOrientationProperty: true]) }
+                    guard let result = ImageFusion.fuse(images, kind: .hdr, context: self.engine.context) else {
+                        self.finishImage(image, settings: job.color, raw: nil, metadata: "HDR fallback · " + job.metadata, warning: "Không ghép được HDR; đã giữ một ảnh nguồn.", options: job.options, original: jpeg); return
+                    }
+                    self.finishImage(result.image, settings: job.color, raw: nil, metadata: "HDR · \(result.used)/3 ảnh · fusion SDR", warning: result.used < 3 ? "Chỉ ghép được \(result.used)/3 khung. Hãy giữ máy yên khi chụp HDR." : nil, options: job.options, original: job.frames.dropFirst().first ?? jpeg)
+                } else if job.purpose == .document {
+                    let (document, corrected) = self.documentImage(image, monochrome: job.options.documentMono)
+                    var settings = job.color; settings.ratio = document.extent.width/document.extent.height
+                    self.finishImage(document, settings: settings, raw: nil, metadata: "DOC · " + job.metadata, warning: corrected ? nil : "Không tìm được bốn góc tài liệu; đã giữ nguyên khung ảnh.", options: job.options, original: jpeg)
+                } else if job.frames.count > 1 {
                     defer { DispatchQueue.main.async { self.capturing = false; self.sequenceProgress = "" } }
                     for (index, frame) in job.frames.enumerated() {
                         guard let image = CIImage(data: frame, options: [.applyOrientationProperty: true]) else { continue }

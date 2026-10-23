@@ -3,10 +3,12 @@ import AVFoundation
 
 // Features are offered from device discovery, never from a model-name whitelist.
 enum ShootingMode: String, CaseIterable, Codable, Identifiable {
-    case photo = "PHOTO", pro = "PRO", portrait = "PORTRAIT", video = "VIDEO", slowMotion = "SLOW", timeLapse = "TIME-LAPSE", longExposure = "LONG"
+    case photo = "PHOTO", pro = "PRO", portrait = "PORTRAIT", hdr = "HDR", night = "NIGHT", panorama = "PANO", document = "DOC", video = "VIDEO", slowMotion = "SLOW", timeLapse = "TIME-LAPSE", longExposure = "LONG"
     var id: String { rawValue }
+    var computational: Bool { self == .hdr || self == .night || self == .panorama || self == .document || self == .longExposure }
     var isMovie: Bool { self == .video || self == .slowMotion || self == .timeLapse }
 }
+enum TrackingMode: String, CaseIterable, Codable { case off = "Tắt", eye = "Mắt / khuôn mặt", subject = "Chủ thể · chạm để chọn" }
 enum PhotoEncoding: String, CaseIterable, Codable { case jpeg = "JPEG", heif = "HEIF" }
 enum VideoTone: String, CaseIterable, Codable { case standard = "SDR", hlg = "HDR HLG", log = "Apple Log" }
 enum SequenceKind: String, CaseIterable, Codable { case single = "Một ảnh", burst = "Chụp liên tiếp", interval = "Chụp cách quãng", bracket = "BKT ±EV" }
@@ -45,9 +47,20 @@ struct ProOptions: Codable, Equatable {
     var saveOriginal = true
     var autoSavePhotos = false
     var timerSeconds = 0
+    var tracking = TrackingMode.off
+    var nightFrames = 6
+    var documentMono = false
     static func restored() -> ProOptions {
-        guard let data = UserDefaults.standard.data(forKey: "glens.pro.options"), let result = try? JSONDecoder().decode(Self.self, from: data) else { return Self() }
-        return result
+        guard let data = UserDefaults.standard.data(forKey: "glens.pro.options") else { return Self() }
+        return migrated(data) ?? Self()
+    }
+    static func migrated(_ data: Data) -> ProOptions? {
+        guard let defaults = try? JSONEncoder().encode(Self()),
+              var fields = (try? JSONSerialization.jsonObject(with: defaults)) as? [String: Any],
+              let stored = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any] else { return nil }
+        fields.merge(stored) { _, old in old }
+        guard let merged = try? JSONSerialization.data(withJSONObject: fields) else { return nil }
+        return try? JSONDecoder().decode(Self.self, from: merged)
     }
     func save() { if let data = try? JSONEncoder().encode(self) { UserDefaults.standard.set(data, forKey: "glens.pro.options") } }
 }

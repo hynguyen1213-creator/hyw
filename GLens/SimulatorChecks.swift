@@ -66,6 +66,8 @@ enum SimulatorChecks {
             checks["Video gallery thumbnail"] = CaptureStore.shared.thumbnail(item.url) != nil
             try CaptureStore.shared.delete(item)
         } catch { checks["Time-lapse file pipeline"] = false; notes.append(error.localizedDescription) }
+        let advanced = AdvancedChecks.run(context: engine.context)
+        checks.merge(advanced.0) { _, next in next }; notes += advanced.1
         let target = CaptureStore.shared.directory.deletingLastPathComponent().appendingPathComponent("SimulatorChecks.json")
         let result: [String: Any] = ["passed": !checks.values.contains(false), "checks": checks, "notes": notes, "hardware_tested": false]
         if let data = try? JSONSerialization.data(withJSONObject: result, options: [.prettyPrinted, .sortedKeys]) { try? data.write(to: target, options: .atomic) }

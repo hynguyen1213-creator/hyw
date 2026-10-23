@@ -1,5 +1,6 @@
 import SwiftUI
 import PhotosUI
+import UniformTypeIdentifiers
 
 private let cameraRed = Color(red: 0.89, green: 0.19, blue: 0.15)
 private let cameraWhite = Color(white: 0.96)
@@ -19,6 +20,7 @@ struct CameraScreen: View {
     @State private var showLooks = false
     @State private var showColor = false
     @State private var showHelp = false
+    @State private var showFileImport = false
     @State private var picker: PhotosPickerItem?
     @State private var countdown = 0
     @State private var countdownTask: Task<Void, Never>?
@@ -50,6 +52,8 @@ struct CameraScreen: View {
             #endif
             if ProcessInfo.processInfo.arguments.contains("--pro-settings") { showProSettings = true }
             if ProcessInfo.processInfo.arguments.contains("--pro-controls") { showControls = true }
+            if ProcessInfo.processInfo.arguments.contains("--night-settings") { camera.changeMode(.night); showProSettings = true }
+            if ProcessInfo.processInfo.arguments.contains("--pano") { camera.changeMode(.panorama) }
         }
         .onDisappear { horizon.stop() }
         .onChange(of: camera.options) { _, _ in camera.updateOptions() }
@@ -74,6 +78,18 @@ struct CameraScreen: View {
             }
         }
         .onChange(of: showGallery) { _, visible in camera.setActive(!visible && scenePhase == .active) }
+        .fileImporter(isPresented: $showFileImport, allowedContentTypes: [.image, .rawImage]) { result in
+            if case .success(let url) = result {
+                Task {
+                    let accessed = url.startAccessingSecurityScopedResource(); defer { if accessed { url.stopAccessingSecurityScopedResource() } }
+                    do {
+                        let size = try url.resourceValues(forKeys: [.fileSizeKey]).fileSize ?? 0
+                        guard size < 150_000_000 else { camera.notify("File quá lớn; chọn ảnh dưới 150 MB."); return }
+                        let data = try await Task.detached(priority: .userInitiated) { try Data(contentsOf: url) }.value; camera.importPhoto(data)
+                    } catch { camera.notify(error.localizedDescription) }
+                }
+            }
+        }
         .sheet(isPresented: $showProSettings) { ProSettingsPanel(camera: camera) }
         .sheet(isPresented: $showPresets) { PresetPanel(camera: camera) }
         .sheet(isPresented: $showControls) {
@@ -116,6 +132,8 @@ struct CameraScreen: View {
                 Image(systemName: "photo.badge.plus").font(.system(size: 17, weight: .light))
                     .frame(width: 36, height: 36)
             }.accessibilityLabel("Mở ảnh").disabled(camera.recording || camera.recordingBusy || camera.capturing || camera.sequenceActive)
+            Button { showFileImport = true } label: { Image(systemName: "doc.badge.plus").frame(width: 32, height: 36) }
+                .accessibilityLabel("Mở RAW/DNG từ Tệp").disabled(camera.recording || camera.recordingBusy || camera.capturing || camera.sequenceActive)
             Button { showProSettings = true } label: {
                 Image(systemName: "gearshape").font(.system(size: 19, weight: .regular))
                     .frame(width: 32, height: 36)
@@ -142,7 +160,7 @@ struct CameraScreen: View {
                     .overlay(RoundedRectangle(cornerRadius: 2).stroke(.white.opacity(camera.rawEnabled ? 0.75 : 0.25), lineWidth: 0.6))
                     .frame(minWidth: 44, minHeight: 34)
             }
-            .disabled(!camera.supportsRaw || camera.imported || camera.capturing || camera.mode.isMovie || camera.mode == .longExposure || camera.options.sequence == .bracket)
+            .disabled(!camera.supportsRaw || camera.imported || camera.capturing || camera.mode.isMovie || camera.mode.computational || camera.options.sequence == .bracket)
             .accessibilityLabel(camera.rawEnabled ? "Tắt RAW" : "Bật RAW nếu camera hỗ trợ")
             Button { camera.options.grid = camera.options.grid == .off ? .thirds : .off } label: {
                 Image(systemName: "grid").font(.system(size: 15, weight: .light))
@@ -201,7 +219,7 @@ struct CameraScreen: View {
                         Color.clear.contentShape(Rectangle())
                             .onTapGesture(coordinateSpace: .local) { point in
                                 let normalized = CGPoint(x: min(1, max(0, point.x / width)), y: min(1, max(0, point.y / height)))
-                                camera.focus(at: normalized)
+                                camera.track(at: normalized)
                                 focusPoint = normalized
                                 focusTask?.cancel()
                                 focusTask = Task { @MainActor in
@@ -209,6 +227,14 @@ struct CameraScreen: View {
                                     if !Task.isCancelled { withAnimation(.easeOut(duration: 0.18)) { focusPoint = nil } }
                                 }
                             }
+                    }
+                    if let target = camera.trackingTarget, !camera.imported {
+                        RoundedRectangle(cornerRadius: 4).stroke(Color.green, lineWidth: 1.2)
+                            .frame(width: target.box.width*width, height: target.box.height*height)
+                            .position(x: target.box.midX*width, y: (1-target.box.midY)*height).allowsHitTesting(false)
+                        Circle().stroke(Color.green, lineWidth: 1.5).frame(width: 16,height: 16)
+                            .position(x: target.point.x*width,y: target.point.y*height).allowsHitTesting(false)
+                        VStack { Text(target.label).font(.system(size: 9, weight: .semibold, design: .monospaced)).foregroundStyle(.green).padding(.top, 45); Spacer() }.allowsHitTesting(false)
                     }
                     if camera.options.histogram && !camera.imported && camera.preview != nil { VStack { HStack { Spacer(); ProHistogram(analysis: camera.analysis) }; Spacer() }.padding(.top, 59).padding(.trailing, 18).allowsHitTesting(false) }
                     RangefinderCorners().stroke(.white.opacity(0.45), lineWidth: 0.7)
@@ -232,7 +258,7 @@ struct CameraScreen: View {
                 }
                 .frame(width: max(1, width), height: max(1, height)).clipped()
                 .simultaneousGesture(MagnifyGesture().onChanged { value in
-                    guard !camera.imported, !camera.changingLens, !camera.capturing else { return }
+                    guard !camera.imported, !camera.changingLens, !camera.capturing, !camera.sequenceActive else { return }
                     if pinchStart == nil { pinchStart = camera.zoom }
                     camera.zoom = max(1, min(camera.maxZoom, (pinchStart ?? 1) * value.magnification)); camera.setZoom(camera.zoom)
                 }.onEnded { _ in pinchStart = nil })
@@ -283,6 +309,11 @@ struct CameraScreen: View {
             }
             Spacer(minLength: 8)
             if !camera.sequenceProgress.isEmpty { Text(camera.sequenceProgress).font(.system(size: 18, weight: .medium, design: .monospaced)).padding(10).background(.black.opacity(0.5), in: Capsule()) }
+            if camera.mode == .hdr { Text("HDR · 3 ảnh · giữ máy yên").font(.system(size: 10)).padding(6).background(.black.opacity(0.35), in: Capsule()) }
+            if camera.mode == .night && !camera.sequenceActive { Text("NIGHT · \(camera.options.nightFrames) ảnh · giữ máy yên").font(.system(size: 10)).padding(6).background(.black.opacity(0.35), in: Capsule()) }
+            if camera.mode == .panorama && !camera.sequenceActive { Text("PANO · giữ máy dọc, lia ngang chậm →").font(.system(size: 10)).padding(6).background(.black.opacity(0.35), in: Capsule()) }
+            if camera.mode == .document { Text("DOC · tự sửa bốn góc khi lưu").font(.system(size: 10)).padding(6).background(.black.opacity(0.35), in: Capsule()) }
+            if camera.options.tracking == .subject && camera.trackingTarget == nil && !camera.sequenceActive { Text("Chạm vào chủ thể để theo nét").font(.system(size: 10)).padding(6).background(.black.opacity(0.35), in: Capsule()) }
             if camera.mode == .portrait { Text("Xoá phông người khi lưu").font(.system(size: 10)).padding(6).background(.black.opacity(0.35), in: Capsule()) }
             if camera.mode == .longExposure { Text("STACK · \(Int(camera.options.longSeconds))s · tripod").font(.system(size: 10, design: .monospaced)).padding(6).background(.black.opacity(0.35), in: Capsule()) }
             HStack(spacing: 9) {
@@ -340,7 +371,7 @@ struct CameraScreen: View {
                                     .frame(width: 31, height: 31)
                                     .foregroundStyle(selected ? cameraRed : .white.opacity(0.75))
                                     .background(selected ? Color.white : Color.clear, in: Circle())
-                            }.disabled(!camera.running || camera.capturing || camera.changingLens)
+                            }.disabled(!camera.running || camera.capturing || camera.changingLens || camera.sequenceActive)
                                 .accessibilityLabel("Zoom số \(String(format: "%g", value)) lần")
                         }
                     }

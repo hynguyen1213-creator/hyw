@@ -6,6 +6,10 @@ struct ProSettingsPanel: View {
     var body: some View {
         NavigationStack {
             Form {
+                Section("Theo nét thông minh") {
+                    Picker("Theo dõi", selection: $camera.options.tracking) { ForEach(TrackingMode.allCases, id: \.self) { Text($0.rawValue).tag($0) } }
+                    Text("Mắt: tự tìm mặt và điểm mắt. Chủ thể: chạm vào vật trong khung ngắm. Tự dừng khi bật MF, khóa AF hoặc chụp ghép; mất dấu thì chạm chọn lại.").font(.caption).foregroundStyle(.secondary)
+                }
                 Section("Hỗ trợ ngắm") {
                     Picker("Lưới", selection: $camera.options.grid) { ForEach(GridStyle.allCases, id: \.self) { Text($0.rawValue).tag($0) } }
                     Toggle("Histogram RGB", isOn: $camera.options.histogram)
@@ -23,14 +27,14 @@ struct ProSettingsPanel: View {
                             Text("JPEG").tag(PhotoEncoding.jpeg)
                             if camera.supportsHEIF || camera.imported { Text("HEIF").tag(PhotoEncoding.heif) }
                         }
-                        Toggle("Độ phân giải cao nhất", isOn: $camera.options.maximumResolution).disabled(camera.options.sequence == .bracket || camera.mode == .longExposure)
+                        Toggle("Độ phân giải cao nhất", isOn: $camera.options.maximumResolution).disabled(camera.options.sequence == .bracket || camera.mode.computational)
                         LabeledContent("Camera đang chọn", value: camera.photoResolution)
-                        Toggle("Lưu thêm DNG gốc", isOn: $camera.rawEnabled).disabled(!camera.supportsRaw || camera.mode == .longExposure || camera.options.sequence == .bracket || camera.imported)
+                        Toggle("Lưu thêm DNG gốc", isOn: $camera.rawEnabled).disabled(!camera.supportsRaw || camera.mode.computational || camera.options.sequence == .bracket || camera.imported)
                         Text(camera.rawLabel).font(.caption).foregroundStyle(.secondary)
                         Toggle("Giữ ảnh chưa áp màu", isOn: $camera.options.saveOriginal)
                         Toggle("Tự lưu vào ứng dụng Ảnh", isOn: $camera.options.autoSavePhotos)
                     }
-                    if camera.mode != .longExposure {
+                    if !camera.mode.computational {
                         Section("Chụp chuỗi") {
                             Picker("Kiểu chụp", selection: $camera.options.sequence) {
                                 ForEach(SequenceKind.allCases, id: \.self) { kind in
@@ -46,6 +50,28 @@ struct ProSettingsPanel: View {
                                 Text("Lưu 3 ảnh sáng khác nhau để chọn hoặc ghép HDR sau. Không ghép HDR tự động. Flash và DNG tắt trong BKT.").font(.caption).foregroundStyle(.secondary)
                             }
                             if camera.options.sequence == .burst { Text("Tốc độ phụ thuộc thời gian phơi sáng và xử lý; không cố định số ảnh/giây.").font(.caption).foregroundStyle(.secondary) }
+                        }
+                    }
+                    if camera.mode == .hdr {
+                        Section("HDR · ghép 3 mức sáng") {
+                            Picker("Bước sáng", selection: $camera.options.bracketEV) { ForEach([Float(0.5), 1, 2], id: \.self) { Text("±\($0, specifier: "%.1f") EV").tag($0) } }
+                            Text("Căn chỉnh các ảnh lệch sáng và ưu tiên vùng phơi sáng tốt. Xuất JPEG/HEIF SDR, cạnh dài tối đa 3072 px; không phải Ultra HDR gain map. Giữ máy yên, tránh chủ thể chuyển động nhanh.").font(.caption).foregroundStyle(.secondary)
+                            if !camera.supportsBracket { Text("Camera đang chọn chưa báo hỗ trợ bracket 3 ảnh.").foregroundStyle(.orange) }
+                        }
+                    }
+                    if camera.mode == .night {
+                        Section("Night · căn chỉnh và giảm nhiễu") {
+                            Picker("Số ảnh", selection: $camera.options.nightFrames) { ForEach([3,6,9,12], id: \.self) { Text("\($0) ảnh").tag($0) } }
+                            Text("Khóa sáng/nét/WB tạm thời, ghép ảnh tĩnh và loại điểm thay đổi mạnh. Cạnh dài tối đa 3072 px. ISO/tốc độ theo Auto hoặc thông số Pro đã chọn. Nhấn dừng để hủy.").font(.caption).foregroundStyle(.secondary)
+                        }
+                    }
+                    if camera.mode == .panorama {
+                        Section("Panorama ngang") { Text("Giữ iPhone dọc và lia ngang chậm một hướng. Bấm dừng để ghép 2–18 khung. Cạnh cao tối đa 1280 px, rộng dưới 8192 px. Chụp cảnh xa, có chi tiết; tránh vật ở gần và quay quá rộng. Ghép tịnh tiến, không phải panorama cầu 360°.").font(.caption).foregroundStyle(.secondary) }
+                    }
+                    if camera.mode == .document {
+                        Section("Tài liệu") {
+                            Toggle("Đen trắng", isOn: $camera.options.documentMono)
+                            Text("Tự tìm bốn góc và sửa phối cảnh khi lưu. Đặt tài liệu trên nền tương phản; giữ ảnh gốc nếu bật tùy chọn File ảnh.").font(.caption).foregroundStyle(.secondary)
                         }
                     }
                     if camera.mode == .longExposure {
@@ -77,10 +103,10 @@ struct ProSettingsPanel: View {
                 }
                 Section("Chụp ảnh") {
                     Picker("Hẹn giờ", selection: $camera.options.timerSeconds) { ForEach([0, 3, 5, 10], id: \.self) { Text($0 == 0 ? "Tắt" : "\($0) giây").tag($0) } }
-                    if camera.supportsFlash && !camera.mode.isMovie && camera.mode != .longExposure { Picker("Flash", selection: $camera.options.flash) { Text("Tắt").tag(0); Text("Tự động").tag(1); Text("Bật").tag(2) } }
+                    if camera.supportsFlash && !camera.mode.isMovie && !camera.mode.computational { Picker("Flash", selection: $camera.options.flash) { Text("Tắt").tag(0); Text("Tự động").tag(1); Text("Bật").tag(2) } }
                     if camera.supportsTorch { Toggle("Đèn liên tục", isOn: Binding(get: { camera.torchOn }, set: { camera.setTorch($0) })) }
                 }
-                Section("G.LENS Pro 0.3") {
+                Section("G.LENS Pro 0.4") {
                     Text("Bộ màu tự xây dựng lấy cảm hứng từ nhiếp ảnh Leica. Các thuật toán, LUT độc quyền và phần cứng Xiaomi không nằm trong ứng dụng.").font(.caption).foregroundStyle(.secondary)
                     Text("Ảnh và video xử lý trên iPhone. Không tải ảnh lên máy chủ.").font(.caption).foregroundStyle(.secondary)
                 }

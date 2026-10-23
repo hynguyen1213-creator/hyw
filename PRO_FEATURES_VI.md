@@ -1,8 +1,8 @@
-# G.LENS Pro 0.3 — camera iPhone
+# G.LENS Pro 0.4 — bản mã đang chờ build
 
-Ứng dụng native SwiftUI + AVFoundation, iOS 17 trở lên. Nâng cấp từ G.LENS 0.2. Mã nguồn có trên GitHub; bản IPA vẫn cần chữ ký và provisioning hợp lệ để cài. Build mới không giải quyết lỗi xác thực Apple ID của Sideloadly/3uTools.
+Ứng dụng native SwiftUI + AVFoundation, iOS 17 trở lên. Bản 0.4 đang ở workspace, chưa được compile hoặc tạo IPA. Bản 0.3 đã build thành công trước đó. Upload mã 0.4 vào repo công khai đang bị automatic approval review chặn, cần xác nhận rõ quyền công bố. Build mới không giải quyết lỗi xác thực Apple ID của Sideloadly/3uTools.
 
-## Đã triển khai
+## Chức năng có trong mã nguồn
 
 | Nhóm | Chức năng | Cách dùng / giới hạn |
 |---|---|---|
@@ -14,6 +14,12 @@
 | File | JPEG/HEIF, DNG hoặc Apple ProRAW khi hỗ trợ, chọn độ phân giải, giữ ảnh gốc | DNG chưa áp màu/crop/khung; ảnh màu xuất riêng. Độ phân giải cao đọc từ active format, không nội suy lên 48/200 MP |
 | Chụp | Hẹn giờ 3/5/10s, flash auto/on/off, torch, chụp liên tiếp, cách quãng 2–99 ảnh | Chụp liên tiếp chờ ảnh trước hoàn tất; không hứa tốc độ burst cố định |
 | Bracket | 3 ảnh ±0.5/1/2 EV, auto hoặc manual | Lưu ba ảnh riêng, không hợp nhất HDR; không flash/RAW trong chế độ này |
+| HDR | Chụp bracket 3 ảnh ±EV, căn chỉnh, ghép ưu tiên vùng sáng tốt | Xuất SDR JPEG/HEIF tối đa cạnh dài 3072 px; không có Ultra HDR gain map. Chưa chạy test mới trên Xcode |
+| Night | Chụp 3/6/9/12 ảnh, khóa tạm AE/AF/WB, căn chỉnh tịnh tiến, giảm nhiễu và loại điểm đổi màu mạnh | Tối đa cạnh dài 3072 px; không có homography/optical flow. Giữ máy yên; ảnh không khớp bị loại |
+| Panorama | Lia ngang, kiểm tra chồng hình, hướng lia, độ nghiêng; ghép 2–18 khung và làm mềm đường nối | Khung preview cạnh dài 1280 px, output rộng dưới 8192 px; cảnh xa, ít thị sai. Không phải ảnh cầu 360° |
+| Theo nét | Vision tìm mắt/mặt hoặc theo vùng người dùng chạm; điều khiển điểm AF thật | Tạm dừng trong MF/AF-lock/chụp ghép; mất dấu cần chọn lại. Chưa thử AF trên iPhone |
+| Tài liệu | Vision tìm bốn góc và sửa phối cảnh khi lưu; màu hoặc đen trắng | Không tìm góc thì giữ nguyên ảnh và báo rõ; chưa xuất PDF/OCR |
+| Mở RAW | Chọn file ảnh/RAW từ Files, giải mã bằng CIRAWFilter rồi áp chỉnh màu | RAW phải được iOS hỗ trợ. DNG nhập được giữ nguyên sidecar; không đổi đuôi CR3/NEF thành DNG |
 | Phơi ghép | Nước mịn hoặc vệt sáng 1–30 giây | Ghép luồng video trên tripod; tối đa cạnh dài 1920 px, không phải bulb cảm biến hay RAW |
 | Chân dung | Tách người bằng Vision, xoá phông khi lưu | Chỉ dành cho người, chưa xem trước xoá phông; không mô phỏng quang học ống kính Leica |
 | Màu ảnh | Authentic, Vibrant, M9 CCD, M3 Mono, Gold, Noir; màu, tương phản, nhiệt độ, tint, shadows/highlights, grain, vignette, sharpness | Bộ màu tự viết lấy cảm hứng; không phải LUT Leica chính hãng |
@@ -28,9 +34,12 @@
 
 Không thể đưa phần cứng cảm biến 1 inch, tele quang 75–100 mm, 200 MP hoặc vòng zoom cơ của Xiaomi vào iPhone bằng phần mềm. Màu, HDR, ProFocus, bokeh, Leica Essential, chứng thực C2PA và các thuật toán độc quyền của hãng không được sao chép.
 
-Chưa triển khai: panorama tự ghép, Live Photo, theo mắt/chủ thể, ghép HDR/đêm có căn chỉnh chống rung, Dolby Vision/ACES, quay nhiều camera đồng thời, video LUT, chỉnh sửa DNG và giao diện quay ngang. Đây là bản Pro beta có những chức năng trong bảng, không phải bản sao đầy đủ 1:1 của toàn bộ ứng dụng Xiaomi.
+Chưa triển khai: Live Photo, Dolby Vision/ACES, quay nhiều camera đồng thời, video LUT, giao diện quay ngang, chụp bằng giọng nói, Super Moon, beauty và các hiệu ứng quang học Master Lens. Căn chỉnh HDR/Night/Pano hiện chỉ dùng tịnh tiến, chưa có homography/optical flow hay mô hình khử nhiễu học máy. Đây là bản Pro beta có những chức năng trong bảng, không phải bản sao đầy đủ 1:1 của toàn bộ ứng dụng Xiaomi.
 
-## Kiểm thử
+## Kiểm thử 0.4 — CHƯA CHẠY XCODE
+
+Các kiểm tra mới đã viết nhưng chưa thực thi: dịch chuyển ảnh biết trước 64 px, ghép panorama so với cảnh gốc, từ chối cảnh không chi tiết, giảm nhiễu Night với nhiễu đã biết, căn chỉnh HDR lệch sáng, migrate tùy chọn cũ, tracker không báo mục tiêu giả và DOC fallback. Kết quả 0.3 bên dưới không chứng minh 0.4 đã qua test.
+
 
 - Kiểm tra cú pháp shell, plist và cấu trúc project trước khi build.
 - CI chạy 12 kiểm tra toán học cho crop/điểm lấy nét/mirroring/luma/bracket/time.
@@ -57,7 +66,7 @@ Chưa triển khai: panorama tự ghép, Live Photo, theo mắt/chủ thể, gh�
 - Apple bracket: https://developer.apple.com/documentation/avfoundation/capturing-a-bracketed-photo-sequence
 - Apple video formats: https://developer.apple.com/documentation/avfoundation/recording-movies-in-alternative-formats
 
-## Kết quả bản phát hành 0.3
+## Lịch sử: kết quả bản phát hành 0.3 (không phải kết quả 0.4)
 
 Build [39917691445](https://github.com/hynguyen1213-creator/hyw/actions/runs/39917691445) hoàn tất thành công với commit `a1cb2319f77e0667b868fe5936ead599f3f12678`: 12 kiểm tra toán học + 16 kiểm tra native trên simulator đã qua. Lỗi phân cột histogram trắng được phát hiện và sửa trước bản giao.
 
