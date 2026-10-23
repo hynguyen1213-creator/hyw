@@ -1,0 +1,25 @@
+{
+  "checks": {
+    "Black not clipped": true,
+    "Delete removes capture sidecars": true,
+    "EXIF exposure preserved": true,
+    "EXIF ISO preserved": true,
+    "Gallery discovers capture": true,
+    "HEIF encode and decode": true,
+    "JPEG square crop 96x96": true,
+    "Long exposure flattens and finishes": true,
+    "Options persistence round trip": true,
+    "Original photo preserved": true,
+    "RAW sidecar byte integrity": true,
+    "Signature frame increases canvas": true,
+    "Time-lapse MOV readable": true,
+    "Video gallery thumbnail": true,
+    "White clipping detected": true,
+    "Zebra overlay generated": true
+  },
+  "hardware_tested": false,
+  "notes": [
+    "White clipped=1.0, last luma bin=1.0"
+  ],
+  "passed": true
+}

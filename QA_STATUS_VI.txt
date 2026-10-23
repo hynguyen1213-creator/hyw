@@ -1,7 +1,19 @@
-G.LENS Pro 0.3
+G.LENS Pro 0.3 — trạng thái kiểm thử
 
-Build đầu tiên bằng Xcode đã archive IPA thành công: commit f9c5edc4f03ed6902e07bb951c4665db74ed1684, run 39915130523.
-12 kiểm tra toán học đã qua.
-Bản hoàn thiện đang chạy lại archive, simulator và kiểm tra image/video pipeline.
-Chưa có chữ ký/provisioning và chưa kiểm tra camera trên iPhone thật.
-Xem PRO_FEATURES_VI.md để biết chức năng và các giới hạn cụ thể.
+Build iPhoneOS thành công, native Mach-O ARM64, iOS 17+.
+Commit: a1cb2319f77e0667b868fe5936ead599f3f12678
+Run: https://github.com/hynguyen1213-creator/hyw/actions/runs/39917691445
+IPA: G_LENS_Pro_v0.3_UNSIGNED_REQUIRES_SIGNING.ipa
+Kích thước: 521669 byte
+SHA256: 1e8c713805b42c46beeeac704125e49f7b29e69458d839a42cc3987904b1b5ae
+ZIP, Mach-O ARM64, platform iOS device, quyền camera/mic/Photos: PASS.
+Chưa ký, không có provisioning profile; cần ký để cài.
+
+12 kiểm tra toán học crop/focus/mirror/luma/bracket/time: PASS.
+Simulator: build và mở ứng dụng thành công; giao diện camera, Pro và thiết lập đã được kiểm tra.
+16/16 kiểm tra native image/video pipeline: PASS. Xem QA/SimulatorChecks.json.
+Toàn bộ workflow hoàn tất thành công. Camera vật lý không được kiểm thử bởi các bài test tổng hợp này.
+
+Chưa kiểm thử phần cứng iPhone: camera thật, RAW/ProRAW, flash, mic,
+HLG/Log, FPS, chống rung, nhiệt độ và vòng đời hệ thống.
+Không khẳng định tương đương 1:1 Xiaomi-Leica. Xem PRO_FEATURES_VI.md.

@@ -56,3 +56,9 @@ Chưa triển khai: panorama tự ghép, Live Photo, theo mắt/chủ thể, gh�
 - Apple RAW: https://developer.apple.com/documentation/avfoundation/capturing-photos-in-raw-and-apple-proraw-formats
 - Apple bracket: https://developer.apple.com/documentation/avfoundation/capturing-a-bracketed-photo-sequence
 - Apple video formats: https://developer.apple.com/documentation/avfoundation/recording-movies-in-alternative-formats
+
+## Kết quả bản phát hành 0.3
+
+Build [39917691445](https://github.com/hynguyen1213-creator/hyw/actions/runs/39917691445) hoàn tất thành công với commit `a1cb2319f77e0667b868fe5936ead599f3f12678`: 12 kiểm tra toán học + 16 kiểm tra native trên simulator đã qua. Lỗi phân cột histogram trắng được phát hiện và sửa trước bản giao.
+
+IPA unsigned 521.669 byte; SHA256 `1e8c713805b42c46beeeac704125e49f7b29e69458d839a42cc3987904b1b5ae`. Đây là kết quả kiểm tra gói cài và pipeline trên ảnh/video tổng hợp, không phải chứng nhận chất lượng camera trên iPhone thật.
