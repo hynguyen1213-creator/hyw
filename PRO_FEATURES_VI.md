@@ -1,6 +1,6 @@
-# G.LENS Pro 0.4 — bản mã đang chờ build
+# G.LENS Pro 0.4 — camera iPhone
 
-Ứng dụng native SwiftUI + AVFoundation, iOS 17 trở lên. Bản 0.4 đang ở workspace, chưa được compile hoặc tạo IPA. Bản 0.3 đã build thành công trước đó. Upload mã 0.4 vào repo công khai đang bị automatic approval review chặn, cần xác nhận rõ quyền công bố. Build mới không giải quyết lỗi xác thực Apple ID của Sideloadly/3uTools.
+Ứng dụng native SwiftUI + AVFoundation, iOS 17 trở lên. Bản 0.4 đã được người dùng cho phép công bố và compile iPhoneOS bằng Xcode. Kết quả kiểm thử bản giao được ghi ở cuối tài liệu. Build mới không giải quyết lỗi xác thực Apple ID của Sideloadly/3uTools.
 
 ## Chức năng có trong mã nguồn
 
@@ -14,7 +14,7 @@
 | File | JPEG/HEIF, DNG hoặc Apple ProRAW khi hỗ trợ, chọn độ phân giải, giữ ảnh gốc | DNG chưa áp màu/crop/khung; ảnh màu xuất riêng. Độ phân giải cao đọc từ active format, không nội suy lên 48/200 MP |
 | Chụp | Hẹn giờ 3/5/10s, flash auto/on/off, torch, chụp liên tiếp, cách quãng 2–99 ảnh | Chụp liên tiếp chờ ảnh trước hoàn tất; không hứa tốc độ burst cố định |
 | Bracket | 3 ảnh ±0.5/1/2 EV, auto hoặc manual | Lưu ba ảnh riêng, không hợp nhất HDR; không flash/RAW trong chế độ này |
-| HDR | Chụp bracket 3 ảnh ±EV, căn chỉnh, ghép ưu tiên vùng sáng tốt | Xuất SDR JPEG/HEIF tối đa cạnh dài 3072 px; không có Ultra HDR gain map. Chưa chạy test mới trên Xcode |
+| HDR | Chụp bracket 3 ảnh ±EV, căn chỉnh, ghép ưu tiên vùng sáng tốt | Xuất SDR JPEG/HEIF tối đa cạnh dài 3072 px; không có Ultra HDR gain map. Kiểm thử trên ảnh tổng hợp; chưa kiểm chứng chất lượng bằng iPhone thật |
 | Night | Chụp 3/6/9/12 ảnh, khóa tạm AE/AF/WB, căn chỉnh tịnh tiến, giảm nhiễu và loại điểm đổi màu mạnh | Tối đa cạnh dài 3072 px; không có homography/optical flow. Giữ máy yên; ảnh không khớp bị loại |
 | Panorama | Lia ngang, kiểm tra chồng hình, hướng lia, độ nghiêng; ghép 2–18 khung và làm mềm đường nối | Khung preview cạnh dài 1280 px, output rộng dưới 8192 px; cảnh xa, ít thị sai. Không phải ảnh cầu 360° |
 | Theo nét | Vision tìm mắt/mặt hoặc theo vùng người dùng chạm; điều khiển điểm AF thật | Tạm dừng trong MF/AF-lock/chụp ghép; mất dấu cần chọn lại. Chưa thử AF trên iPhone |
@@ -22,7 +22,8 @@
 | Mở RAW | Chọn file ảnh/RAW từ Files, giải mã bằng CIRAWFilter rồi áp chỉnh màu | RAW phải được iOS hỗ trợ. DNG nhập được giữ nguyên sidecar; không đổi đuôi CR3/NEF thành DNG |
 | Phơi ghép | Nước mịn hoặc vệt sáng 1–30 giây | Ghép luồng video trên tripod; tối đa cạnh dài 1920 px, không phải bulb cảm biến hay RAW |
 | Chân dung | Tách người bằng Vision, xoá phông khi lưu | Chỉ dành cho người, chưa xem trước xoá phông; không mô phỏng quang học ống kính Leica |
-| Màu ảnh | Authentic, Vibrant, M9 CCD, M3 Mono, Gold, Noir; màu, tương phản, nhiệt độ, tint, shadows/highlights, grain, vignette, sharpness | Bộ màu tự viết lấy cảm hứng; không phải LUT Leica chính hãng |
+| Màu ảnh | Authentic, Vibrant, M9 CCD, M3 Mono, Classic Gold, Noir; thêm Gold 200, Portra 400, Ektar 100, Fuji C200, HP5 400 và Cine 800T | Sáu mô phỏng film có đường cong RGB/LUT tự tạo, mức hạt đề xuất và quầng sáng; không phải LUT của hãng hay màu đã hiệu chuẩn bằng film thật |
+| UX/UI | Khung ngắm lớn, nút Mode cạnh nút chụp, thước EV kéo ngang, bảng ô thiết lập nhanh, dải preset có ảnh thu nhỏ của cảnh hiện tại | Bố cục lấy cảm hứng Leica LUX, giữ thương hiệu G.LENS; chạm AUTO/M mở điều khiển chi tiết |
 | Preset | Lưu và gọi lại màu + ISO/tốc độ/focus/WB/EV, xoá preset | Cấu hình được giới hạn lại theo camera đang dùng |
 | Video Pro | 1080p/4K; 24/25/30/50/60/120 fps theo thiết bị, mic, chống rung | HEVC nếu đầu ra hỗ trợ, H.264 dự phòng; chưa áp bộ màu ảnh vào video |
 | HDR / Log | HDR HLG / Apple Log khi format tương thích | Chỉ hiện các format 10-bit được camera công bố. HLG không phải Dolby Vision |
@@ -36,9 +37,9 @@ Không thể đưa phần cứng cảm biến 1 inch, tele quang 75–100 mm, 20
 
 Chưa triển khai: Live Photo, Dolby Vision/ACES, quay nhiều camera đồng thời, video LUT, giao diện quay ngang, chụp bằng giọng nói, Super Moon, beauty và các hiệu ứng quang học Master Lens. Căn chỉnh HDR/Night/Pano hiện chỉ dùng tịnh tiến, chưa có homography/optical flow hay mô hình khử nhiễu học máy. Đây là bản Pro beta có những chức năng trong bảng, không phải bản sao đầy đủ 1:1 của toàn bộ ứng dụng Xiaomi.
 
-## Kiểm thử 0.4 — CHƯA CHẠY XCODE
+## Kiểm thử 0.4
 
-Các kiểm tra mới đã viết nhưng chưa thực thi: dịch chuyển ảnh biết trước 64 px, ghép panorama so với cảnh gốc, từ chối cảnh không chi tiết, giảm nhiễu Night với nhiễu đã biết, căn chỉnh HDR lệch sáng, migrate tùy chọn cũ, tracker không báo mục tiêu giả và DOC fallback. Kết quả 0.3 bên dưới không chứng minh 0.4 đã qua test.
+Bộ kiểm tra mới gồm: dịch chuyển ảnh biết trước 64 px, ghép panorama so với cảnh gốc, từ chối cảnh không chi tiết, giảm nhiễu Night với nhiễu đã biết, căn chỉnh HDR lệch sáng, migrate tùy chọn cũ, tracker không báo mục tiêu giả và DOC fallback. Có thêm kiểm thử sáu film cho ảnh khác nhau và HP5 đen trắng. Kết quả lần chạy hiện tại được ghi riêng; dữ liệu 0.3 là lịch sử.
 
 
 - Kiểm tra cú pháp shell, plist và cấu trúc project trước khi build.
@@ -71,3 +72,7 @@ Các kiểm tra mới đã viết nhưng chưa thực thi: dịch chuyển ảnh
 Build [39917691445](https://github.com/hynguyen1213-creator/hyw/actions/runs/39917691445) hoàn tất thành công với commit `a1cb2319f77e0667b868fe5936ead599f3f12678`: 12 kiểm tra toán học + 16 kiểm tra native trên simulator đã qua. Lỗi phân cột histogram trắng được phát hiện và sửa trước bản giao.
 
 IPA unsigned 521.669 byte; SHA256 `1e8c713805b42c46beeeac704125e49f7b29e69458d839a42cc3987904b1b5ae`. Đây là kết quả kiểm tra gói cài và pipeline trên ảnh/video tổng hợp, không phải chứng nhận chất lượng camera trên iPhone thật.
+
+## Kết quả bản phát hành 0.4
+
+Build [39931957572](https://github.com/hynguyen1213-creator/hyw/actions/runs/39931957572) thành công: 12 kiểm tra toán học và 39 kiểm tra native simulator đều qua. Giao diện camera, ô thiết lập, dải film và chọn mode đã được xem qua ảnh simulator. IPA ARM64 unsigned 606.148 byte; xem QA_STATUS_VI.txt cho checksum và giới hạn kiểm thử. Chưa kiểm thử camera vật lý.

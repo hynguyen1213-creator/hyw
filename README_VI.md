@@ -1,6 +1,6 @@
-# Bản mới: G.LENS Pro 0.3
+# Bản mới: G.LENS Pro 0.4
 
-Xem [PRO_FEATURES_VI.md](PRO_FEATURES_VI.md) để biết tính năng, giới hạn và cách kiểm thử. Phần dưới là ghi chép bản 0.2 để tham khảo lịch sử.
+Xem [ghi chú bản 0.4](RELEASE_0.4_VI.md) và [PRO_FEATURES_VI.md](PRO_FEATURES_VI.md) để biết tính năng, giới hạn và cách kiểm thử. Phần dưới là ghi chép bản 0.2 để tham khảo lịch sử.
 
 # G.LENS iOS · 0.2.0 beta
 

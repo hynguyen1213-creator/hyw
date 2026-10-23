@@ -1,17 +1,13 @@
 {
-  "file": "G_LENS_Pro_v0.3_UNSIGNED_REQUIRES_SIGNING.ipa",
-  "bytes": 521669,
-  "sha256": "1e8c713805b42c46beeeac704125e49f7b29e69458d839a42cc3987904b1b5ae",
-  "version": "0.3.0",
-  "bundleID": "com.gstudio.glens",
-  "minIOS": "17.0",
-  "native_arm64": true,
-  "iOS_device_platform": 2,
-  "code_signature": false,
-  "encrypted": false,
-  "provisioning_profile": false,
-  "binary_bytes": 1189144,
-  "archive_integrity": "PASS",
-  "commit": "a1cb2319f77e0667b868fe5936ead599f3f12678",
-  "run_id": 39917691445
+  "version": "0.4.0",
+  "build": "4",
+  "bundle": "com.gstudio.glens",
+  "size": 606148,
+  "executable_bytes": 1364096,
+  "platform": "iPhoneOS ARM64",
+  "sha256": "3b988350c967f31f94e94eca1860b8507b014206827aa322d9595701d1f81fb4",
+  "signed": false,
+  "provisioned": false,
+  "zip_crc": "pass",
+  "usage_keys": true
 }

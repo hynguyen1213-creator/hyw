@@ -1,30 +1,21 @@
-G.LENS Pro 0.4 — CHƯA BUILD / CHƯA CÓ IPA MỚI
+G.LENS Pro 0.4 — XCODE BUILD THÀNH CÔNG
 
-Mã thay đổi đã được rà soát cú pháp Swift bằng tree-sitter, plist,
-tham chiếu project và cú pháp shell. Đây không phải biên dịch Xcode.
-Các bài test ImageFusion/Panorama/Tracker mới CHƯA CHẠY.
-Auto-review từ chối upload source mới vào repo GitHub công khai vì
-chưa xác minh được quyền công bố payload này. Chưa thử lại upload.
-Camera vật lý chưa được kiểm thử. Không khẳng định tương đương 1:1.
+Commit: 16e6720a0f29c5b5817ef8b93c0b69b67450a2e5
+Run: https://github.com/hynguyen1213-creator/hyw/actions/runs/39931957572
+IPA: G_LENS_Pro_v0.4_UNSIGNED_REQUIRES_SIGNING.ipa
+Kích thước: 606148 byte
+SHA256: 3b988350c967f31f94e94eca1860b8507b014206827aa322d9595701d1f81fb4
+Native Mach-O ARM64, iPhoneOS, iOS 17+; ZIP CRC và usage keys: PASS.
+Unsigned: chưa có chữ ký hoặc provisioning profile. Cần ký để cài.
 
---- LỊCH SỬ BẢN 0.3, KHÔNG ÁP CHO 0.4 ---
+12/12 kiểm tra toán học: PASS.
+39/39 kiểm tra native simulator: PASS. Xem QA/SimulatorChecks.json.
+Hồi quy Night với nhiễu dạng sọc: PASS, sai số trung bình 0.
+Workflow archive + simulator + screenshot hoàn tất thành công.
+Đã xem ảnh simulator của camera, quick panel, film drawer và mode picker.
+UI LUX-inspired và sáu film preset đã được biên dịch vào bản giao.
 
-G.LENS Pro 0.3 — trạng thái kiểm thử
-
-Build iPhoneOS thành công, native Mach-O ARM64, iOS 17+.
-Commit: a1cb2319f77e0667b868fe5936ead599f3f12678
-Run: https://github.com/hynguyen1213-creator/hyw/actions/runs/39917691445
-IPA: G_LENS_Pro_v0.3_UNSIGNED_REQUIRES_SIGNING.ipa
-Kích thước: 521669 byte
-SHA256: 1e8c713805b42c46beeeac704125e49f7b29e69458d839a42cc3987904b1b5ae
-ZIP, Mach-O ARM64, platform iOS device, quyền camera/mic/Photos: PASS.
-Chưa ký, không có provisioning profile; cần ký để cài.
-
-12 kiểm tra toán học crop/focus/mirror/luma/bracket/time: PASS.
-Simulator: build và mở ứng dụng thành công; giao diện camera, Pro và thiết lập đã được kiểm tra.
-16/16 kiểm tra native image/video pipeline: PASS. Xem QA/SimulatorChecks.json.
-Toàn bộ workflow hoàn tất thành công. Camera vật lý không được kiểm thử bởi các bài test tổng hợp này.
-
-Chưa kiểm thử phần cứng iPhone: camera thật, RAW/ProRAW, flash, mic,
-HLG/Log, FPS, chống rung, nhiệt độ và vòng đời hệ thống.
-Không khẳng định tương đương 1:1 Xiaomi-Leica. Xem PRO_FEATURES_VI.md.
+Camera thật, chất lượng AF, RAW/ProRAW, video HLG/Log, nhiệt độ và
+chất lượng ảnh thực tế chưa được kiểm thử trên iPhone vật lý.
+Preset là màu tự thiết kế, không phải LUT được Leica/nhãn film cấp phép.
+Không khẳng định tương đương 1:1 Xiaomi–Leica.
