@@ -34,6 +34,11 @@ jobs:
           IOS_P12_PASSWORD: ${{ secrets.IOS_P12_PASSWORD }}
           IOS_PROFILE_BASE64: ${{ secrets.IOS_PROFILE_BASE64 }}
         run: bash scripts/prepare_signing.sh
+      - name: Verify exposure, crop and metering math
+        run: |
+          mkdir -p build
+          swiftc GLens/ProMath.swift Tests/ProMathTests.swift -o build/pro-math-tests
+          build/pro-math-tests | tee build/tests.log
       - name: Compile archive and package real IPA
         env:
           GLENS_SIGNING_MODE: ${{ inputs.signing || 'unsigned' }}
@@ -46,6 +51,16 @@ jobs:
             build/*.ipa
             build/*.sha256
           if-no-files-found: error
+          retention-days: 7
+      - name: Launch simulator and capture interface
+        run: bash scripts/simulator_smoke.sh
+      - name: Upload simulator screenshots
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: G-LENS-Pro-interface
+          path: build/screenshots/*.png
+          if-no-files-found: ignore
           retention-days: 7
       - name: Upload build logs
         if: always()

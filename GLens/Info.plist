@@ -1,23 +1,55 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-<plist version="1.0"><dict>
-<key>CFBundleDevelopmentRegion</key><string>vi</string>
-<key>CFBundleDisplayName</key><string>G.LENS</string>
-<key>CFBundleExecutable</key><string>$(EXECUTABLE_NAME)</string>
-<key>CFBundleIdentifier</key><string>$(PRODUCT_BUNDLE_IDENTIFIER)</string>
-<key>CFBundleInfoDictionaryVersion</key><string>6.0</string>
-<key>CFBundleName</key><string>$(PRODUCT_NAME)</string>
-<key>CFBundlePackageType</key><string>APPL</string>
-<key>CFBundleShortVersionString</key><string>0.2.0</string>
-<key>CFBundleVersion</key><string>2</string>
-<key>LSRequiresIPhoneOS</key><true/>
-<key>NSCameraUsageDescription</key><string>G.LENS cần camera để chụp ảnh, xem màu trực tiếp và chỉnh ISO, tốc độ, lấy nét. Ảnh được xử lý trên iPhone.</string>
-<key>NSPhotoLibraryAddUsageDescription</key><string>Cho G.LENS lưu ảnh JPEG đã chỉnh màu và DNG gốc khi bạn bấm Lưu vào Ảnh.</string>
-<key>UIApplicationSceneManifest</key><dict><key>UIApplicationSupportsMultipleScenes</key><false/></dict>
-<key>UILaunchScreen</key><dict/>
-<key>UISupportedInterfaceOrientations</key><array><string>UIInterfaceOrientationPortrait</string></array>
-<key>UIRequiredDeviceCapabilities</key><array><string>arm64</string></array>
-<key>UIUserInterfaceStyle</key><string>Dark</string>
-<key>UIFileSharingEnabled</key><true/>
-<key>LSSupportsOpeningDocumentsInPlace</key><true/>
-</dict></plist>
+<plist version="1.0">
+<dict>
+	<key>CFBundleDevelopmentRegion</key>
+	<string>vi</string>
+	<key>CFBundleDisplayName</key>
+	<string>G.LENS</string>
+	<key>CFBundleExecutable</key>
+	<string>$(EXECUTABLE_NAME)</string>
+	<key>CFBundleIdentifier</key>
+	<string>$(PRODUCT_BUNDLE_IDENTIFIER)</string>
+	<key>CFBundleInfoDictionaryVersion</key>
+	<string>6.0</string>
+	<key>CFBundleName</key>
+	<string>$(PRODUCT_NAME)</string>
+	<key>CFBundlePackageType</key>
+	<string>APPL</string>
+	<key>CFBundleShortVersionString</key>
+	<string>0.3.0</string>
+	<key>CFBundleVersion</key>
+	<string>3</string>
+	<key>LSRequiresIPhoneOS</key>
+	<true/>
+	<key>NSCameraUsageDescription</key>
+	<string>G.LENS cần camera để chụp ảnh, xem màu trực tiếp và chỉnh ISO, tốc độ, lấy nét. Ảnh được xử lý trên iPhone.</string>
+	<key>NSPhotoLibraryAddUsageDescription</key>
+	<string>G.LENS lưu ảnh, DNG và video vào Ảnh khi bạn chọn lưu hoặc bật tự lưu.</string>
+	<key>UIApplicationSceneManifest</key>
+	<dict>
+		<key>UIApplicationSupportsMultipleScenes</key>
+		<false/>
+	</dict>
+	<key>UILaunchScreen</key>
+	<dict/>
+	<key>UISupportedInterfaceOrientations</key>
+	<array>
+		<string>UIInterfaceOrientationPortrait</string>
+	</array>
+	<key>UIRequiredDeviceCapabilities</key>
+	<array>
+		<string>arm64</string>
+	</array>
+	<key>UIUserInterfaceStyle</key>
+	<string>Dark</string>
+	<key>UIFileSharingEnabled</key>
+	<true/>
+	<key>LSSupportsOpeningDocumentsInPlace</key>
+	<true/>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>G.LENS cần micro để thu tiếng khi bạn quay video. Có thể tắt thu tiếng trong Thiết lập chụp.</string>
+	<key>NSMotionUsageDescription</key>
+	<string>G.LENS dùng cảm biến chuyển động để hiển thị đường chân trời cân bằng.</string>
+</dict>
+</plist>

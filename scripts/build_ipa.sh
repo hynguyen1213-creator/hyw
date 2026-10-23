@@ -38,7 +38,7 @@ if [[ "$mode" == signed ]]; then
   xcodebuild -exportArchive -archivePath "$archive_path" -exportOptionsPlist "$EXPORT_OPTIONS_PLIST" -exportPath "$artifact_dir/export" 2>&1 | tee "$artifact_dir/export.log"
   exported_ipa="$(find "$artifact_dir/export" -maxdepth 1 -name '*.ipa' -type f -print -quit)"
   test -n "$exported_ipa"
-  ipa_path="$artifact_dir/G_LENS_v0.2_SIGNED.ipa"
+  ipa_path="$artifact_dir/G_LENS_Pro_v0.3_SIGNED.ipa"
   cp "$exported_ipa" "$ipa_path"
   verify_dir="$(mktemp -d "${TMPDIR:-/tmp}/glens-verify.XXXXXX")"
   trap 'rm -rf "$verify_dir"' EXIT
@@ -51,7 +51,7 @@ else
   trap 'rm -rf "$payload_dir"' EXIT
   mkdir -p "$payload_dir/Payload"
   ditto "$app_path" "$payload_dir/Payload/GLens.app"
-  ipa_path="$artifact_dir/G_LENS_v0.2_UNSIGNED_REQUIRES_SIGNING.ipa"
+  ipa_path="$artifact_dir/G_LENS_Pro_v0.3_UNSIGNED_REQUIRES_SIGNING.ipa"
   (cd "$payload_dir" && /usr/bin/zip -qyr "$ipa_path" Payload)
   echo 'Unsigned IPA built from a real Mach-O application. It requires signing and is not directly installable.'
 fi

@@ -9,15 +9,17 @@ private let cameraPanel = Color(red: 0.095, green: 0.10, blue: 0.098)
 struct CameraScreen: View {
     @ObservedObject var camera: CameraController
     @Environment(\.scenePhase) private var scenePhase
-    @State private var color = ColorSettings()
+    @State private var color = ColorSettings.restored()
+    @StateObject private var horizon = HorizonMeter()
+    @State private var showProSettings = false
+    @State private var showPresets = false
+    @State private var pinchStart: CGFloat?
     @State private var showControls = false
     @State private var showGallery = false
     @State private var showLooks = false
     @State private var showColor = false
     @State private var showHelp = false
-    @State private var grid = false
     @State private var picker: PhotosPickerItem?
-    @State private var timer = 0
     @State private var countdown = 0
     @State private var countdownTask: Task<Void, Never>?
     @State private var shutterPending = false
@@ -30,6 +32,7 @@ struct CameraScreen: View {
             VStack(spacing: 0) {
                 header(compact: compact)
                 utilityBar
+                if camera.mode == .pro { quickControls }
                 viewfinder
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                 captureDeck(compact: compact)
@@ -39,9 +42,22 @@ struct CameraScreen: View {
         }
         .background(cameraBlack.ignoresSafeArea())
         .foregroundStyle(cameraWhite)
-        .task { camera.authorizeAndStart(); update() }
+        .task {
+            if !ProcessInfo.processInfo.arguments.contains("--ui-smoke") { camera.authorizeAndStart(); horizon.start() }
+            update(); camera.updateOptions()
+            if ProcessInfo.processInfo.arguments.contains("--pro-settings") { showProSettings = true }
+            if ProcessInfo.processInfo.arguments.contains("--pro-controls") { showControls = true }
+        }
+        .onDisappear { horizon.stop() }
+        .onChange(of: camera.options) { _, _ in camera.updateOptions() }
+        .onChange(of: camera.colorRevision) { _, _ in color = camera.currentColor() }
+        .onChange(of: camera.mode) { _, mode in
+            if mode.isMovie { color.ratio = 9.0 / 16 } else { color.ratio = 3.0 / 4 }
+            update()
+        }
         .onChange(of: scenePhase) { _, phase in
-            camera.setActive(phase == .active)
+            camera.setActive(phase == .active && !showGallery)
+            if phase == .active { horizon.start() } else { horizon.stop() }
             if phase != .active {
                 countdownTask?.cancel(); countdown = 0; shutterPending = false
                 focusTask?.cancel(); focusPoint = nil
@@ -54,7 +70,9 @@ struct CameraScreen: View {
                 camera.importPhoto(data)
             }
         }
-        .onChange(of: showGallery) { _, visible in camera.setActive(!visible) }
+        .onChange(of: showGallery) { _, visible in camera.setActive(!visible && scenePhase == .active) }
+        .sheet(isPresented: $showProSettings) { ProSettingsPanel(camera: camera) }
+        .sheet(isPresented: $showPresets) { PresetPanel(camera: camera) }
         .sheet(isPresented: $showControls) {
             HardwareControls(camera: camera)
                 .presentationDetents([.large]).presentationDragIndicator(.visible)
@@ -72,6 +90,9 @@ struct CameraScreen: View {
                 .presentationBackground(cameraPanel)
         }
         .sheet(isPresented: $showHelp) { help }
+        .overlay(alignment: .top) {
+            if !camera.toast.isEmpty { Text(camera.toast).font(.system(size: 12, weight: .medium)).padding(12).background(.ultraThinMaterial, in: Capsule()).padding(.top, 90).allowsHitTesting(false) }
+        }
         .alert("G.LENS", isPresented: Binding(get: { !camera.message.isEmpty }, set: { if !$0 { camera.message = "" } })) {
             Button("OK") { camera.message = "" }
         } message: { Text(camera.message) }
@@ -84,18 +105,18 @@ struct CameraScreen: View {
                 Text("G.LENS").font(.system(size: 20, weight: .semibold)).tracking(-0.8)
             }
             Spacer()
-            Text(camera.imported ? "DARKROOM" : "CAMERA")
+            Text(camera.imported ? "DARKROOM" : "PRO CAMERA")
                 .font(.system(size: 8, weight: .medium, design: .monospaced))
                 .tracking(2.3).foregroundStyle(.white.opacity(0.35))
             Spacer()
             PhotosPicker(selection: $picker, matching: .images) {
                 Image(systemName: "photo.badge.plus").font(.system(size: 17, weight: .light))
                     .frame(width: 36, height: 36)
-            }.accessibilityLabel("Mở ảnh")
-            Button { showHelp = true } label: {
-                Image(systemName: "ellipsis").font(.system(size: 19, weight: .regular))
+            }.accessibilityLabel("Mở ảnh").disabled(camera.recording || camera.recordingBusy || camera.capturing || camera.sequenceActive)
+            Button { showProSettings = true } label: {
+                Image(systemName: "gearshape").font(.system(size: 19, weight: .regular))
                     .frame(width: 32, height: 36)
-            }.accessibilityLabel("Thông tin G.LENS")
+            }.accessibilityLabel("Thiết lập chụp")
         }
         .padding(.horizontal, 21).frame(height: compact ? 44 : 52)
     }
@@ -105,33 +126,33 @@ struct CameraScreen: View {
             HStack(spacing: 6) {
                 Circle().fill(camera.running ? Color.green.opacity(0.7) : cameraRed.opacity(0.8))
                     .frame(width: 3, height: 3)
-                Text(camera.imported ? "EDIT" : "LIVE")
+                Text(camera.recording ? "REC " + ProMath.durationLabel(camera.elapsed) : camera.imported ? "EDIT" : "LIVE")
                     .font(.system(size: 8, weight: .medium, design: .monospaced)).tracking(1.2)
             }.foregroundStyle(.white.opacity(0.55))
             Spacer()
             Button {
                 if camera.supportsRaw && !camera.imported { camera.rawEnabled.toggle() }
             } label: {
-                Text(camera.rawEnabled && !camera.imported ? "RAW+" : "JPEG")
+                Text(camera.mode.isMovie ? (camera.selectedVideo?.tone.rawValue ?? "VIDEO") : camera.rawEnabled && !camera.imported ? "RAW+" : camera.options.encoding.rawValue)
                     .font(.system(size: 8, weight: .semibold, design: .monospaced))
                     .padding(.horizontal, 5).padding(.vertical, 3)
                     .overlay(RoundedRectangle(cornerRadius: 2).stroke(.white.opacity(camera.rawEnabled ? 0.75 : 0.25), lineWidth: 0.6))
                     .frame(minWidth: 44, minHeight: 34)
             }
-            .disabled(!camera.supportsRaw || camera.imported || camera.capturing)
+            .disabled(!camera.supportsRaw || camera.imported || camera.capturing || camera.mode.isMovie || camera.mode == .longExposure || camera.options.sequence == .bracket)
             .accessibilityLabel(camera.rawEnabled ? "Tắt RAW" : "Bật RAW nếu camera hỗ trợ")
-            Button { grid.toggle() } label: {
+            Button { camera.options.grid = camera.options.grid == .off ? .thirds : .off } label: {
                 Image(systemName: "grid").font(.system(size: 15, weight: .light))
-                    .foregroundStyle(grid ? cameraWhite : .white.opacity(0.4))
+                    .foregroundStyle(camera.options.grid != .off ? cameraWhite : .white.opacity(0.4))
                     .frame(width: 43, height: 34)
             }.accessibilityLabel("Lưới bố cục")
-            Button { timer = timer == 0 ? 3 : timer == 3 ? 10 : 0 } label: {
+            Button { camera.options.timerSeconds = camera.options.timerSeconds == 0 ? 3 : camera.options.timerSeconds == 3 ? 10 : 0 } label: {
                 HStack(spacing: 3) {
                     Image(systemName: "timer").font(.system(size: 15, weight: .light))
-                    if timer > 0 { Text("\(timer)").font(.system(size: 8, design: .monospaced)) }
-                }.foregroundStyle(timer > 0 ? cameraWhite : .white.opacity(0.4))
+                    if camera.options.timerSeconds > 0 { Text("\(camera.options.timerSeconds)").font(.system(size: 8, design: .monospaced)) }
+                }.foregroundStyle(camera.options.timerSeconds > 0 ? cameraWhite : .white.opacity(0.4))
                     .frame(width: 43, height: 34)
-            }.accessibilityLabel(timer == 0 ? "Bật hẹn giờ" : "Hẹn giờ \(timer) giây")
+            }.accessibilityLabel(camera.options.timerSeconds == 0 ? "Bật hẹn giờ" : "Hẹn giờ \(camera.options.timerSeconds) giây")
             Menu {
                 Button("4:3") { color.ratio = 3.0 / 4; update() }
                 Button("3:2") { color.ratio = 2.0 / 3; update() }
@@ -140,7 +161,7 @@ struct CameraScreen: View {
             } label: {
                 Text(ratioName).font(.system(size: 9, weight: .medium, design: .monospaced))
                     .frame(width: 38, height: 34)
-            }.accessibilityLabel("Tỷ lệ ảnh \(ratioName)")
+            }.accessibilityLabel("Tỷ lệ ảnh \(ratioName)").disabled(camera.mode.isMovie || camera.capturing || camera.recording || camera.sequenceActive)
         }
         .foregroundStyle(.white.opacity(0.7)).padding(.horizontal, 21).frame(height: 34)
     }
@@ -159,7 +180,18 @@ struct CameraScreen: View {
                     } else {
                         permissionView
                     }
-                    if grid { CompositionGrid().allowsHitTesting(false) }
+                    if camera.options.grid != .off { ProGrid(style: camera.options.grid).stroke(.white.opacity(0.24), lineWidth: 0.5).allowsHitTesting(false) }
+                    if let overlay = camera.analysis.overlay, !camera.imported, camera.options.zebra || camera.options.peaking {
+                        Image(uiImage: overlay).resizable().interpolation(.none).frame(width: width, height: height).allowsHitTesting(false)
+                    }
+                    if camera.options.safeFrame { Rectangle().strokeBorder(.white.opacity(0.45), style: StrokeStyle(lineWidth: 0.7, dash: [4, 3])).padding(width * 0.05).allowsHitTesting(false) }
+                    if camera.options.level && !camera.imported {
+                        ZStack {
+                            Rectangle().fill(.white.opacity(0.45)).frame(width: 68, height: 1)
+                            Rectangle().fill(abs(horizon.degrees) < 1.5 ? Color.green : Color.yellow).frame(width: 68, height: 2).rotationEffect(.degrees(-horizon.degrees))
+                            Circle().stroke(abs(horizon.degrees) < 1.5 ? Color.green : Color.yellow, lineWidth: 1).frame(width: 7, height: 7)
+                        }.allowsHitTesting(false)
+                    }
                     LinearGradient(colors: [.black.opacity(0.27), .clear, .clear, .black.opacity(0.52)], startPoint: .top, endPoint: .bottom)
                         .allowsHitTesting(false)
                     if camera.preview != nil && !camera.imported {
@@ -175,6 +207,7 @@ struct CameraScreen: View {
                                 }
                             }
                     }
+                    if camera.options.histogram && !camera.imported { VStack { HStack { Spacer(); ProHistogram(analysis: camera.analysis) }; Spacer() }.padding(.top, 59).padding(.trailing, 18).allowsHitTesting(false) }
                     RangefinderCorners().stroke(.white.opacity(0.45), lineWidth: 0.7)
                         .padding(11).allowsHitTesting(false)
                     if let focusPoint {
@@ -195,6 +228,11 @@ struct CameraScreen: View {
                     }
                 }
                 .frame(width: max(1, width), height: max(1, height)).clipped()
+                .simultaneousGesture(MagnifyGesture().onChanged { value in
+                    guard !camera.imported, !camera.changingLens, !camera.capturing else { return }
+                    if pinchStart == nil { pinchStart = camera.zoom }
+                    camera.zoom = max(1, min(camera.maxZoom, (pinchStart ?? 1) * value.magnification)); camera.setZoom(camera.zoom)
+                }.onEnded { _ in pinchStart = nil })
             }.frame(width: available.size.width, height: available.size.height)
         }
     }
@@ -229,9 +267,9 @@ struct CameraScreen: View {
                 Button { showLooks = true } label: {
                     HStack(spacing: 6) {
                         Rectangle().fill(cameraRed).frame(width: 4, height: 4)
-                        Text(color.look.name.uppercased()).font(.system(size: 8, weight: .medium, design: .monospaced)).tracking(1)
+                        Text(camera.mode.isMovie ? (camera.selectedVideo?.title ?? "VIDEO") : color.look.name.uppercased()).font(.system(size: 8, weight: .medium, design: .monospaced)).tracking(1)
                     }.padding(8).background(.black.opacity(0.17), in: RoundedRectangle(cornerRadius: 3))
-                }.accessibilityLabel("Chọn chất ảnh")
+                }.accessibilityLabel("Chọn chất ảnh").disabled(camera.mode.isMovie)
                 Spacer()
                 Text("GỐC").font(.system(size: 8, weight: .medium)).tracking(0.4)
                     .padding(.horizontal, 10).frame(height: 30)
@@ -241,14 +279,20 @@ struct CameraScreen: View {
                     .accessibilityLabel("Giữ để xem ảnh gốc")
             }
             Spacer(minLength: 8)
+            if !camera.sequenceProgress.isEmpty { Text(camera.sequenceProgress).font(.system(size: 18, weight: .medium, design: .monospaced)).padding(10).background(.black.opacity(0.5), in: Capsule()) }
+            if camera.mode == .portrait { Text("Xoá phông người khi lưu").font(.system(size: 10)).padding(6).background(.black.opacity(0.35), in: Capsule()) }
+            if camera.mode == .longExposure { Text("STACK · \(Int(camera.options.longSeconds))s · tripod").font(.system(size: 10, design: .monospaced)).padding(6).background(.black.opacity(0.35), in: Capsule()) }
             HStack(spacing: 9) {
                 Text(camera.imported ? "ON-DEVICE COLOR" : String(format: "ISO %.0f", camera.currentISO))
                 if !camera.imported {
                     Text(shutterName(camera.currentShutter))
                     if camera.manualExposure { Text("M").foregroundStyle(cameraRed) }
+                    Text(String(format: "%+.1f", camera.meterEV))
+                    if camera.aeLocked { Text("AE-L").foregroundStyle(.yellow) }
+                    if camera.afLocked { Text("AF-L").foregroundStyle(.yellow) }
                 }
                 Spacer()
-                if camera.rawEnabled && !camera.imported { Text("DNG + JPG") }
+                if !camera.imported && !camera.mode.isMovie { Text(camera.photoResolution) }
             }
             .font(.system(size: 8, weight: .regular, design: .monospaced))
             .foregroundStyle(.white.opacity(0.72)).padding(.horizontal, 7).padding(.bottom, 14)
@@ -279,7 +323,7 @@ struct CameraScreen: View {
                         .padding(.horizontal, 10).frame(height: 36)
                         .background(.black.opacity(0.65), in: Capsule())
                 }
-                .disabled(!camera.running || camera.capturing || camera.changingLens)
+                .disabled(!camera.running || camera.capturing || camera.changingLens || camera.recording || camera.recordingBusy || camera.sequenceActive)
                 .accessibilityLabel("Chọn camera vật lý")
                 HStack(spacing: 1) {
                     ForEach(compact ? [1.0, 2.0, 3.0] : [1.0, 1.2, 1.5, 2.0, 3.0], id: \.self) { value in
@@ -304,14 +348,13 @@ struct CameraScreen: View {
 
     private func captureDeck(compact: Bool) -> some View {
         VStack(spacing: compact ? 8 : 12) {
-            HStack(spacing: 27) {
-                modeButton("PHOTO", selected: !isEssential) {
-                    if isEssential { color.look = Look.all[0]; update() }
-                }
-                modeButton("ESSENTIAL", selected: isEssential) {
-                    if !isEssential { color.look = Look.all[2]; update() }
-                }
-            }.frame(height: 24)
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 23) {
+                    ForEach(ShootingMode.allCases) { mode in
+                        modeButton(mode.rawValue, selected: camera.mode == mode) { camera.changeMode(mode) }
+                    }
+                }.padding(.horizontal, 23)
+            }.frame(height: 32).disabled(camera.recording || camera.recordingBusy || camera.capturing || camera.sequenceActive || shutterPending)
             HStack {
                 Button { showGallery = true } label: {
                     ZStack {
@@ -323,26 +366,27 @@ struct CameraScreen: View {
                         }
                     }.frame(width: 42, height: 46).clipped().clipShape(RoundedRectangle(cornerRadius: 5))
                         .overlay(RoundedRectangle(cornerRadius: 5).stroke(.white.opacity(0.16), lineWidth: 0.6))
-                }.frame(width: 62, height: 70).accessibilityLabel("Thư viện ảnh")
+                }.frame(width: 62, height: 70).accessibilityLabel("Thư viện ảnh").disabled(camera.recording || camera.recordingBusy || camera.capturing || camera.sequenceActive)
                 Spacer()
                 Button { timedCapture() } label: {
                     ZStack {
                         Circle().stroke(.white.opacity(0.85), lineWidth: 1.5)
-                        Circle().fill(cameraWhite).padding(6)
-                        if camera.capturing { ProgressView().tint(.black) }
+                        if camera.recording || camera.sequenceActive { RoundedRectangle(cornerRadius: 5).fill(cameraRed).frame(width: 27, height: 27) }
+                        else { Circle().fill(camera.mode.isMovie ? cameraRed : cameraWhite).padding(6) }
+                        if camera.capturing || camera.recordingBusy { ProgressView().tint(.black) }
                         if shutterPending { Text("\(max(1, countdown))").font(.system(size: 20, weight: .medium, design: .monospaced)).foregroundStyle(.black) }
                     }.frame(width: compact ? 68 : 76, height: compact ? 68 : 76)
                 }
                 .buttonStyle(CameraShutterStyle())
-                .disabled(camera.capturing || camera.changingLens || camera.adjustingExposure || shutterPending || (!camera.running && !camera.imported))
-                .accessibilityLabel(camera.imported ? "Lưu ảnh đã chỉnh màu" : "Chụp ảnh")
+                .disabled((camera.capturing && !camera.sequenceActive) || camera.changingLens || camera.recordingBusy || camera.adjustingExposure || shutterPending || (!camera.running && !camera.imported) || (camera.mode.isMovie && camera.selectedVideo == nil))
+                .accessibilityLabel(camera.recording || camera.sequenceActive ? "Dừng" : camera.mode.isMovie ? "Quay video" : camera.imported ? "Lưu ảnh đã chỉnh màu" : "Chụp ảnh")
                 Spacer()
                 Button { showControls = true } label: {
                     VStack(spacing: 6) {
                         Image(systemName: "slider.horizontal.3").font(.system(size: 21, weight: .light))
                         Text(camera.manualExposure ? "MANUAL" : "PRO").font(.system(size: 7, weight: .medium, design: .monospaced)).tracking(1.2)
                     }.frame(width: 62, height: 70).foregroundStyle(camera.manualExposure ? cameraRed : .white.opacity(0.75))
-                }.accessibilityLabel("Điều khiển camera phần cứng")
+                }.accessibilityLabel("Điều khiển camera phần cứng").disabled(camera.recordingBusy || camera.capturing || camera.sequenceActive)
             }.padding(.horizontal, 28)
         }
         .padding(.top, compact ? 5 : 10).padding(.bottom, compact ? 8 : 15)
@@ -359,14 +403,15 @@ struct CameraScreen: View {
                     Text(color.look.name).font(.system(size: 11, weight: .medium))
                     Image(systemName: "chevron.up").font(.system(size: 8, weight: .medium)).foregroundStyle(.white.opacity(0.4))
                 }.frame(height: 43)
-            }.accessibilityLabel("Chọn chất ảnh \(color.look.name)")
+            }.accessibilityLabel("Chọn chất ảnh \(color.look.name)").disabled(camera.mode.isMovie)
             Spacer()
+            Button { showPresets = true } label: { Image(systemName: "bookmark").font(.system(size: 17)).frame(width: 42, height: 43) }.accessibilityLabel("Preset cá nhân").disabled(camera.recording || camera.capturing)
             Button { showColor = true } label: {
                 HStack(spacing: 6) {
                     Image(systemName: "dial.low").font(.system(size: 14, weight: .light))
                     Text("Tinh chỉnh").font(.system(size: 10))
                 }.foregroundStyle(.white.opacity(0.55)).frame(height: 43)
-            }.accessibilityLabel("Tinh chỉnh màu và khung ảnh")
+            }.accessibilityLabel("Tinh chỉnh màu và khung ảnh").disabled(camera.mode.isMovie)
         }.padding(.horizontal, 25)
             .overlay(alignment: .top) { Rectangle().fill(.white.opacity(0.07)).frame(height: 0.5).padding(.horizontal, 20) }
     }
@@ -414,6 +459,14 @@ struct CameraScreen: View {
                     colorSlider("Cường độ màu", value: $color.strength)
                     colorSlider("Hạt ảnh", value: $color.grain)
                     colorSlider("Tối viền", value: $color.vignette)
+                    adjustmentSlider("Bù sáng xử lý", value: $color.exposure, range: -2...2)
+                    adjustmentSlider("Tương phản", value: $color.contrast, range: 0.7...1.4)
+                    adjustmentSlider("Bão hoà", value: $color.saturation, range: 0...1.5)
+                    adjustmentSlider("Ấm / lạnh", value: $color.temperature, range: -1...1)
+                    adjustmentSlider("Tint xanh / tím", value: $color.tint, range: -1...1)
+                    adjustmentSlider("Vùng tối", value: $color.shadows, range: -0.5...1)
+                    adjustmentSlider("Vùng sáng", value: $color.highlights, range: 0...1)
+                    colorSlider("Độ nét", value: $color.sharpness)
                 }
                 Rectangle().fill(.white.opacity(0.08)).frame(height: 0.5)
                 Toggle(isOn: $color.frame) {
@@ -432,7 +485,7 @@ struct CameraScreen: View {
                         .onChange(of: color.author) { _, _ in update() }
                 }
                 Button {
-                    color.strength = 0.8; color.grain = 0.15; color.vignette = 0.2; update()
+                    let look = color.look; color = ColorSettings(); color.look = look; update()
                 } label: {
                     Label("Đặt lại tinh chỉnh", systemImage: "arrow.counterclockwise")
                         .font(.system(size: 10)).foregroundStyle(.white.opacity(0.4)).frame(maxWidth: .infinity)
@@ -471,10 +524,20 @@ struct CameraScreen: View {
         }
     }
 
+    private func adjustmentSlider(_ title: String, value: Binding<Float>, range: ClosedRange<Float>) -> some View {
+        VStack { HStack { Text(title); Spacer(); Text(String(format: "%.2f", value.wrappedValue)).monospacedDigit() }.font(.system(size: 12)); Slider(value: value, in: range).tint(cameraRed).onChange(of: value.wrappedValue) { _, _ in update() } }
+    }
+    private var quickControls: some View {
+        HStack(spacing: 0) {
+            ForEach([("WB", camera.manualWB ? "\(Int(camera.whiteBalanceKelvin))K" : "AUTO"), ("ISO", String(format: "%.0f", camera.currentISO)), ("S", ProMath.shutterLabel(camera.currentShutter)), ("EV", String(format: "%+.1f", camera.exposureBias)), ("FOCUS", camera.manualFocus ? "MF" : "AF")], id: \.0) { item in
+                Button { showControls = true } label: { VStack(spacing: 4) { Text(item.0).font(.system(size: 9)); Text(item.1).font(.system(size: 11, weight: .medium, design: .monospaced)) }.frame(maxWidth: .infinity).frame(height: 43) }
+            }
+        }.background(.white.opacity(0.025))
+    }
     private func modeButton(_ title: String, selected: Bool, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             VStack(spacing: 5) {
-                Text(title).font(.system(size: 8, weight: .medium, design: .monospaced)).tracking(1.8)
+                Text(title).font(.system(size: 11, weight: .medium, design: .monospaced)).tracking(0.5)
                     .foregroundStyle(selected ? cameraWhite : .white.opacity(0.3))
                 Circle().fill(selected ? cameraRed : .clear).frame(width: 3, height: 3)
             }
@@ -497,7 +560,9 @@ struct CameraScreen: View {
     private func update() { camera.updateColor(color) }
     private func timedCapture() {
         guard !shutterPending else { return }
-        if timer == 0 { camera.capture(); return }
+        if camera.recording || camera.sequenceActive { camera.shutterAction(); return }
+        let timer = camera.options.timerSeconds
+        if timer == 0 { camera.shutterAction(); return }
         shutterPending = true
         countdownTask = Task { @MainActor in
             for count in stride(from: timer, through: 1, by: -1) {
@@ -506,7 +571,7 @@ struct CameraScreen: View {
                 try? await Task.sleep(for: .seconds(1))
             }
             countdown = 0; shutterPending = false
-            if !Task.isCancelled { camera.capture() }
+            if !Task.isCancelled { camera.shutterAction() }
         }
     }
 

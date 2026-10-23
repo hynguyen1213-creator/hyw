@@ -11,6 +11,7 @@ struct HardwareControls: View {
     @State private var focus = 0.5
     @State private var kelvin = 5500.0
     @State private var ev = 0.0
+    @State private var tint = 0.0
 
     var body: some View {
         ScrollView(showsIndicators: false) {
@@ -19,17 +20,23 @@ struct HardwareControls: View {
                 liveReadings
                 if camera.imported {
                     Label("Đang chỉnh ảnh đã nhập. Quay lại camera để điều khiển phần cứng.", systemImage: "photo")
-                        .font(.system(size: 10)).lineSpacing(4).foregroundStyle(.white.opacity(0.45))
+                        .font(.system(size: 12)).lineSpacing(4).foregroundStyle(.white.opacity(0.45))
                         .padding(15).frame(maxWidth: .infinity, alignment: .leading)
                         .background(.white.opacity(0.035), in: RoundedRectangle(cornerRadius: 10))
                 }
+                HStack {
+                    Button(camera.aeLocked ? "AE-L •" : "Khoá AE") { camera.toggleAELock() }.disabled(camera.manualExposure)
+                    Button(camera.afLocked ? "AF-L •" : "Khoá AF") { camera.toggleAFLock() }
+                    Spacer()
+                    Button("Auto tất cả") { camera.resetHardware() }
+                }.font(.system(size: 12)).buttonStyle(.bordered).disabled(camera.imported || !camera.running)
                 exposureControls
                 focusControls
                 whiteBalanceControls
-                fileControls
+                if !camera.mode.isMovie { fileControls }
                 zoomControls
                 Text("Thông số được áp vào camera đang chọn. Các chức năng không được phần cứng hỗ trợ sẽ bị mờ.")
-                    .font(.system(size: 9)).lineSpacing(4).foregroundStyle(.white.opacity(0.25))
+                    .font(.system(size: 12)).lineSpacing(4).foregroundStyle(.white.opacity(0.25))
                     .padding(.horizontal, 2).padding(.bottom, 12)
             }.padding(.horizontal, 24).padding(.top, 31).padding(.bottom, 22)
         }
@@ -40,7 +47,8 @@ struct HardwareControls: View {
             shutterDial = log2(clamp(camera.currentShutter, camera.minShutter, camera.maxShutter))
             ev = Double(camera.exposureBias)
             focus = Double(camera.focusPosition)
-            kelvin = clamp(Double(camera.whiteBalanceKelvin), 2500, 9000)
+            kelvin = clamp(Double(camera.whiteBalanceKelvin), 2000, 12000)
+            tint = Double(camera.whiteBalanceTint)
         }
     }
 
@@ -52,7 +60,7 @@ struct HardwareControls: View {
                     Text("Điều khiển").font(.system(size: 27, weight: .light)).tracking(-0.9)
                     Text(".").font(.system(size: 27, weight: .light)).foregroundStyle(controlRed)
                 }
-                Text(camera.activeCameraName).font(.system(size: 10)).foregroundStyle(.white.opacity(0.35))
+                Text(camera.activeCameraName).font(.system(size: 12)).foregroundStyle(.white.opacity(0.35))
             }
             Spacer()
             Button { dismiss() } label: {
@@ -90,7 +98,7 @@ struct HardwareControls: View {
                     .onChange(of: shutterDial) { _, _ in exposure() }
             } else {
                 sliderLabel("Bù sáng", String(format: "%+.1f EV", ev))
-                Slider(value: $ev, in: -2...2, step: 0.1)
+                Slider(value: $ev, in: Double(camera.minEV)...Double(max(camera.minEV + 0.1, camera.maxEV)), step: 0.1)
                     .onChange(of: ev) { _, value in camera.setEV(Float(value)) }.disabled(camera.imported)
             }
         }
@@ -109,22 +117,25 @@ struct HardwareControls: View {
 
     private var whiteBalanceControls: some View {
         controlGroup("Cân bằng trắng", symbol: "thermometer.medium", mode: camera.manualWB ? "KELVIN" : "AWB") {
-            Toggle("WB thủ công", isOn: Binding(get: { camera.manualWB }, set: { camera.setWB(manual: $0, kelvin: Float(kelvin)) }))
+            Toggle("WB thủ công", isOn: Binding(get: { camera.manualWB }, set: { camera.setWB(manual: $0, kelvin: Float(kelvin), tint: Float(tint)) }))
                 .disabled(!camera.supportsWB || camera.imported)
             if camera.manualWB {
                 sliderLabel("Nhiệt độ", "\(Int(kelvin)) K")
-                Slider(value: $kelvin, in: 2500...9000, step: 50).onChange(of: kelvin) { _, value in camera.setWB(manual: true, kelvin: Float(value)) }
+                Slider(value: $kelvin, in: 2000...12000, step: 50).onChange(of: kelvin) { _, value in camera.setWB(manual: true, kelvin: Float(value), tint: Float(tint)) }
+                sliderLabel("Tint xanh / tím", String(format: "%+.0f", tint))
+                Slider(value: $tint, in: -150...150).onChange(of: tint) { _, value in camera.setWB(manual: true, kelvin: Float(kelvin), tint: Float(value)) }
+                HStack { ForEach([3200.0, 4300, 5600, 6500], id: \.self) { value in Button("\(Int(value))K") { kelvin = value }.font(.system(size: 12)).buttonStyle(.bordered) } }
             }
         }
     }
 
     private var fileControls: some View {
         controlGroup("Định dạng ảnh", symbol: "doc", mode: camera.rawEnabled ? "RAW+" : "JPEG") {
-            Toggle("JPEG màu + DNG gốc", isOn: $camera.rawEnabled)
-                .disabled(!camera.supportsRaw || camera.imported || camera.capturing)
+            Toggle("Ảnh màu + DNG gốc", isOn: $camera.rawEnabled)
+                .disabled(!camera.supportsRaw || camera.imported || camera.capturing || camera.options.sequence == .bracket || camera.mode == .longExposure)
             Text(camera.rawLabel).font(.system(size: 10, design: .monospaced)).foregroundStyle(.white.opacity(0.45))
-            Text("DNG giữ dữ liệu camera, chưa áp màu hay khung G.LENS. JPEG được xử lý riêng.")
-                .font(.system(size: 9)).lineSpacing(4).foregroundStyle(.white.opacity(0.25))
+            Text("DNG giữ dữ liệu camera, chưa áp màu hay khung G.LENS. JPEG/HEIF được xử lý riêng.")
+                .font(.system(size: 12)).lineSpacing(4).foregroundStyle(.white.opacity(0.25))
         }
     }
 
@@ -152,13 +163,13 @@ struct HardwareControls: View {
                     .foregroundStyle(mode == "MANUAL" || mode == "MF" || mode == "KELVIN" || mode == "RAW+" ? controlRed : .white.opacity(0.25))
             }
             Rectangle().fill(.white.opacity(0.07)).frame(height: 0.5)
-            content().font(.system(size: 11)).tint(controlRed)
+            content().font(.system(size: 12)).tint(controlRed)
         }.padding(16).background(.white.opacity(0.025), in: RoundedRectangle(cornerRadius: 11))
             .overlay(RoundedRectangle(cornerRadius: 11).stroke(.white.opacity(0.055), lineWidth: 0.5))
     }
     private func sliderLabel(_ label: String, _ value: String) -> some View {
         HStack {
-            Text(label).font(.system(size: 10)).foregroundStyle(.white.opacity(0.45))
+            Text(label).font(.system(size: 12)).foregroundStyle(.white.opacity(0.45))
             Spacer()
             Text(value).font(.system(size: 11, design: .monospaced)).foregroundStyle(.white.opacity(0.75))
         }

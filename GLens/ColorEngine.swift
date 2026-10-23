@@ -3,7 +3,7 @@ import CoreImage
 import ImageIO
 import CoreImage.CIFilterBuiltins
 
-struct Look: Identifiable, Equatable {
+struct Look: Identifiable, Equatable, Codable {
     let id: String
     let name: String
     let subtitle: String
@@ -20,7 +20,7 @@ struct Look: Identifiable, Equatable {
         .init(id: "noir", name: "Noir", subtitle: "LIGHT & SHADOW", saturation: 0, contrast: 1.4, warmth: 0, lift: 0)
     ]
 }
-struct ColorSettings {
+struct ColorSettings: Codable {
     var look = Look.all[0]
     var strength: Float = 0.8
     var grain: Float = 0.15
@@ -29,6 +29,19 @@ struct ColorSettings {
     var author = ""
     var ratio: CGFloat = 3.0 / 4.0 // portrait width / height
     var compare = false
+    var exposure: Float = 0
+    var contrast: Float = 1
+    var saturation: Float = 1
+    var temperature: Float = 0
+    var tint: Float = 0
+    var shadows: Float = 0
+    var highlights: Float = 1
+    var sharpness: Float = 0
+    static func restored() -> ColorSettings {
+        guard let data = UserDefaults.standard.data(forKey: "glens.color"), let value = try? JSONDecoder().decode(Self.self, from: data) else { return Self() }
+        return value
+    }
+    func save() { if let data = try? JSONEncoder().encode(self) { UserDefaults.standard.set(data, forKey: "glens.color") } }
 }
 final class ColorEngine {
     let context = CIContext(options: [.cacheIntermediates: false])
@@ -43,7 +56,7 @@ final class ColorEngine {
     }
     func process(_ input: CIImage, settings: ColorSettings, preview: Bool) -> CIImage {
         var original = crop(input, ratio: settings.ratio)
-        let limit: CGFloat = preview ? 1280 : 6000
+        let limit: CGFloat = preview ? 1080 : 16384
         if max(original.extent.width, original.extent.height) > limit {
             let factor = min(1, limit / max(original.extent.width, original.extent.height))
             original = original.transformed(by: CGAffineTransform(scaleX: factor, y: factor))
@@ -58,6 +71,11 @@ final class ColorEngine {
         let blendBase = look.saturation == 0 ? original.applyingFilter("CIColorControls", parameters: [kCIInputSaturationKey: 0]) : original
         let mask = CIImage(color: CIColor(red: CGFloat(settings.strength), green: CGFloat(settings.strength), blue: CGFloat(settings.strength))).cropped(to: original.extent)
         image = image.applyingFilter("CIBlendWithMask", parameters: [kCIInputBackgroundImageKey: blendBase, kCIInputMaskImageKey: mask])
+        image = image.applyingFilter("CIExposureAdjust", parameters: [kCIInputEVKey: settings.exposure])
+        image = image.applyingFilter("CIColorControls", parameters: [kCIInputSaturationKey: settings.saturation, kCIInputContrastKey: settings.contrast])
+        image = image.applyingFilter("CITemperatureAndTint", parameters: ["inputNeutral": CIVector(x: 6500, y: 0), "inputTargetNeutral": CIVector(x: 6500 + CGFloat(settings.temperature) * 2500, y: CGFloat(settings.tint) * 100)])
+        image = image.applyingFilter("CIHighlightShadowAdjust", parameters: ["inputHighlightAmount": settings.highlights, "inputShadowAmount": settings.shadows])
+        if settings.sharpness > 0 { image = image.applyingFilter("CISharpenLuminance", parameters: [kCIInputSharpnessKey: settings.sharpness]) }
         if settings.vignette > 0 {
             image = image.applyingFilter("CIVignette", parameters: [kCIInputIntensityKey: settings.vignette * 0.75, kCIInputRadiusKey: min(image.extent.width, image.extent.height) * 0.65])
         }
@@ -74,10 +92,10 @@ final class ColorEngine {
         guard let cg = context.createCGImage(image, from: image.extent, format: .RGBA8, colorSpace: colorSpace) else { return nil }
         return UIImage(cgImage: cg)
     }
-    private func encode(_ ui: UIImage, originalProperties: [String: Any]) -> Data? {
+    private func encode(_ ui: UIImage, originalProperties: [String: Any], encoding: PhotoEncoding) -> Data? {
         guard let cg = ui.cgImage else { return nil }
         let data = NSMutableData()
-        guard let destination = CGImageDestinationCreateWithData(data, "public.jpeg" as CFString, 1, nil) else { return nil }
+        guard let destination = CGImageDestinationCreateWithData(data, (encoding == .heif ? "public.heic" : "public.jpeg") as CFString, 1, nil) else { return nil }
         var properties = originalProperties
         properties[kCGImagePropertyOrientation as String] = 1
         properties[kCGImagePropertyPixelWidth as String] = cg.width
@@ -91,9 +109,9 @@ final class ColorEngine {
         guard CGImageDestinationFinalize(destination) else { return nil }
         return data as Data
     }
-    func jpeg(_ image: CIImage, settings: ColorSettings, metadata: String) -> Data? {
+    func jpeg(_ image: CIImage, settings: ColorSettings, metadata: String, encoding: PhotoEncoding = .jpeg) -> Data? {
         guard let ui = uiImage(process(image, settings: settings, preview: false)) else { return nil }
-        if !settings.frame { return encode(ui, originalProperties: image.properties) }
+        if !settings.frame { return encode(ui, originalProperties: image.properties, encoding: encoding) }
         let w = ui.size.width, h = ui.size.height
         let pad = round(w * 0.035), footer = round(w * 0.10)
         let format = UIGraphicsImageRendererFormat(); format.scale = 1; format.opaque = true
@@ -106,6 +124,6 @@ final class ColorEngine {
             (text as NSString).draw(in: CGRect(x: w * 0.27, y: h + pad * 1.55, width: w * 0.72, height: footer * 0.4), withAttributes: [.font: UIFont.monospacedSystemFont(ofSize: w * 0.012, weight: .regular), .foregroundColor: UIColor.gray])
             (settings.author as NSString).draw(at: CGPoint(x: w * 0.27, y: h + pad * 2.3), withAttributes: [.font: UIFont.systemFont(ofSize: w * 0.012), .foregroundColor: UIColor.gray])
         }
-        return encode(rendered, originalProperties: image.properties)
+        return encode(rendered, originalProperties: image.properties, encoding: encoding)
     }
 }
