@@ -69,7 +69,12 @@ enum AdvancedChecks {
             filmSignatures.insert(Data(bytes))
             checks["Film renders " + look.id] = bytes.count == 256*256*4 && bytes.enumerated().filter { $0.offset%4 != 3 }.contains { $0.element > 20 && $0.element < 240 }
             if look.id == "hp5" {
-                checks["HP5 is monochrome"] = stride(from:0,to:bytes.count,by:4).allSatisfy { abs(Int(bytes[$0])-Int(bytes[$0+1])) <= 1 && abs(Int(bytes[$0+1])-Int(bytes[$0+2])) <= 1 }
+                var monochrome = true
+                for i in stride(from:0,to:bytes.count,by:4) {
+                    let red = Int(bytes[i]), green = Int(bytes[i+1]), blue = Int(bytes[i+2])
+                    if abs(red-green) > 1 || abs(green-blue) > 1 { monochrome = false; break }
+                }
+                checks["HP5 is monochrome"] = monochrome
             }
         }
         checks["Six film profiles produce distinct images"] = filmSignatures.count == 6
