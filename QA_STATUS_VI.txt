@@ -1,18 +1,7 @@
-G.LENS iOS 0.2.0 · Trạng thái
+G.LENS Pro 0.3
 
-Đã sửa giao diện camera: kính ngắm lớn, màn hình chính không cuộn, màu và phần cứng dùng bảng kéo lên.
-Đã sửa RAW partial-save, thông báo RAW thiếu, EXIF khung ảnh và chờ phơi sáng bị ngắt.
-Đã kiểm tra: cú pháp 7 file Swift bằng tree-sitter; PBX/Info.plist/XML; cú pháp shell; YAML workflow.
-Đã chuẩn bị workflow GitHub macOS tạo IPA unsigned hoặc signed và kiểm tra executable/chữ ký khi chạy.
-Bản web mới đã xuất bản; đã xem trên trình duyệt, đổi look và thử chụp JPEG.
-
-Đã chạy thành công: Xcode 26.6 compile/archive/link trên GitHub macOS và đóng gói IPA unsigned.
-Build: https://github.com/hynguyen1213-creator/hyw/actions/runs/39903900318
-Commit build: d9d0f5d7f9f03aada29bf322d715f8525529b4f1
-File: G_LENS_v0.2_UNSIGNED_REQUIRES_SIGNING.ipa (335060 bytes)
-SHA256: 1b97f565bc83511dd044627b4fb4097f946fbc31d88f61c6b041dfc8b3603ca0
-Đã kiểm tra artifact checksum, ZIP toàn vẹn, Mach-O arm64, platform iOS device, minimum iOS 17.0 và quyền camera/Photos.
-Chưa chạy: camera native trên iPhone và thử cài trên thiết bị.
-Chưa có: chứng chỉ/provisioning profile, chữ ký và IPA cài trực tiếp.
-Kết nối GitHub đã thấy repo hynguyen1213-creator/hyw; workflow tự build khi push main.
-Không coi kiểm tra parser hay việc có workflow là bằng chứng app đã build hoặc cài được.
+Build đầu tiên bằng Xcode đã archive IPA thành công: commit f9c5edc4f03ed6902e07bb951c4665db74ed1684, run 39915130523.
+12 kiểm tra toán học đã qua.
+Bản hoàn thiện đang chạy lại archive, simulator và kiểm tra image/video pipeline.
+Chưa có chữ ký/provisioning và chưa kiểm tra camera trên iPhone thật.
+Xem PRO_FEATURES_VI.md để biết chức năng và các giới hạn cụ thể.

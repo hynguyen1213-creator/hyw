@@ -13,6 +13,7 @@ extension CameraController {
         }
     }
     func updateOptions() {
+        if options.sequence == .bracket { rawEnabled = false }
         options.save(); let value = options
         locked { renderOptions = value }
         guard !capturing, !recording, !recordingBusy, !sequenceActive else { return }
@@ -116,6 +117,10 @@ extension CameraController {
             try VNImageRequestHandler(ciImage: image, options: [:]).perform([request])
             guard let buffer = request.results?.first?.pixelBuffer else { return image }
             var mask = CIImage(cvPixelBuffer: buffer)
+            let average = mask.applyingFilter("CIAreaAverage", parameters: [kCIInputExtentKey: CIVector(cgRect: mask.extent)])
+            var rgba = [Float](repeating: 0, count: 4)
+            engine.context.render(average, toBitmap: &rgba, rowBytes: 16, bounds: CGRect(x: 0, y: 0, width: 1, height: 1), format: .RGBAf, colorSpace: CGColorSpaceCreateDeviceRGB())
+            guard rgba[0] > 0.002 else { DispatchQueue.main.async { self.showToast("Không tìm thấy người; giữ ảnh không xoá phông") }; return image }
             mask = mask.transformed(by: CGAffineTransform(scaleX: image.extent.width / mask.extent.width, y: image.extent.height / mask.extent.height))
             mask = mask.applyingFilter("CIGaussianBlur", parameters: [kCIInputRadiusKey: max(1, image.extent.width / 1600)]).cropped(to: image.extent)
             let background = image.clampedToExtent().applyingFilter("CIGaussianBlur", parameters: [kCIInputRadiusKey: amount * image.extent.width / 65]).cropped(to: image.extent)
@@ -135,6 +140,7 @@ extension CameraController {
             for fps in [Int32(24), 25, 30, 50, 60, 120, 240] {
                 guard format.videoSupportedFrameRateRanges.contains(where: { $0.minFrameRate <= Double(fps) && $0.maxFrameRate >= Double(fps) }) else { continue }
                 for tone in VideoTone.allCases {
+                    if tone == .standard && !format.supportedColorSpaces.contains(.sRGB) { continue }
                     if tone == .log && (!tenBit || !format.supportedColorSpaces.contains(.appleLog)) { continue }
                     if tone == .hlg && (!tenBit || !format.supportedColorSpaces.contains(.HLG_BT2020)) { continue }
                     let choice = VideoChoice(width: size.width, height: size.height, fps: fps, tone: tone)
@@ -147,6 +153,7 @@ extension CameraController {
     func changeMode(_ newMode: ShootingMode) {
         guard !capturing, !recording, !recordingBusy, !sequenceActive, !changingLens, !imported else { return }
         changingLens = true; mode = newMode
+        if newMode == .longExposure { rawEnabled = false }
         locked { renderMode = newMode }
         sessionQueue.async {
             defer { DispatchQueue.main.async { self.changingLens = false } }
@@ -193,6 +200,8 @@ extension CameraController {
             notify("Camera này không hỗ trợ chế độ video đã chọn."); return
         }
         let colorSpace: AVCaptureColorSpace = choice.tone == .log ? .appleLog : choice.tone == .hlg ? .HLG_BT2020 : .sRGB
+        currentVideo = nil
+        DispatchQueue.main.async { self.selectedVideo = nil }
         let candidates = device.formats.filter { f in
             let size = CMVideoFormatDescriptionGetDimensions(f.formatDescription)
             let tenBit = CMFormatDescriptionGetMediaSubType(f.formatDescription) == kCVPixelFormatType_420YpCbCr10BiPlanarVideoRange
@@ -205,6 +214,9 @@ extension CameraController {
             device.activeVideoMinFrameDuration = CMTime(value: 1, timescale: choice.fps)
             device.activeVideoMaxFrameDuration = CMTime(value: 1, timescale: choice.fps)
             device.activeColorSpace = colorSpace
+            self.exposureRevision &+= 1; self.exposureInFlight = false
+            DispatchQueue.main.async { self.adjustingExposure = false }
+            if device.hasTorch { device.torchMode = .off }
             if device.isExposureModeSupported(.continuousAutoExposure) { device.exposureMode = .continuousAutoExposure }
             if device.isFocusModeSupported(.continuousAutoFocus) { device.focusMode = .continuousAutoFocus }
             if device.isWhiteBalanceModeSupported(.continuousAutoWhiteBalance) { device.whiteBalanceMode = .continuousAutoWhiteBalance }
@@ -262,6 +274,7 @@ extension CameraController {
     func didStartRecording() {
         recording = true; recordingBusy = false; elapsed = 0; recordingStarted = ProcessInfo.processInfo.systemUptime
         UIApplication.shared.isIdleTimerDisabled = true
+        if UIApplication.shared.applicationState != .active { stopRecording(); return }
         recordingTimer?.invalidate()
         recordingTimer = Timer.scheduledTimer(withTimeInterval: 0.25, repeats: true) { [weak self] _ in
             guard let self else { return }; self.elapsed = ProcessInfo.processInfo.systemUptime - self.recordingStarted
@@ -392,6 +405,7 @@ final class FrameMovieWriter {
         if adaptor.append(buffer, withPresentationTime: CMTime(value: count, timescale: 30)) { last = now; count += 1 }
     }
     func finish(completion: @escaping (Result<URL, Error>) -> Void) {
+        guard writer.status == .writing else { completion(.failure(writer.error ?? ProCaptureError.failed("Bộ ghi time-lapse đã dừng."))); return }
         guard count > 0 else { writer.cancelWriting(); try? FileManager.default.removeItem(at: url); completion(.failure(ProCaptureError.failed("Chưa có khung hình time-lapse."))); return }
         writer.endSession(atSourceTime: CMTime(value: count, timescale: 30)); input.markAsFinished()
         writer.finishWriting { completion(self.writer.status == .completed ? .success(self.url) : .failure(self.writer.error ?? ProCaptureError.failed("Lỗi ghi time-lapse."))) }

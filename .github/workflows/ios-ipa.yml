@@ -67,7 +67,9 @@ jobs:
         uses: actions/upload-artifact@v7
         with:
           name: G-LENS-build-logs
-          path: build/*.log
+          path: |
+            build/*.log
+            build/SimulatorChecks.json
           if-no-files-found: ignore
           retention-days: 7
       - name: Remove temporary signing material

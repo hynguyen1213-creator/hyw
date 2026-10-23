@@ -1,3 +1,7 @@
+# Bản mới: G.LENS Pro 0.3
+
+Xem [PRO_FEATURES_VI.md](PRO_FEATURES_VI.md) để biết tính năng, giới hạn và cách kiểm thử. Phần dưới là ghi chép bản 0.2 để tham khảo lịch sử.
+
 # G.LENS iOS · 0.2.0 beta
 
 Camera iPhone viết bằng SwiftUI + AVFoundation, xử lý màu bằng Core Image ngay trên máy. Có project Xcode đầy đủ; không cần API key, không có máy chủ xử lý ảnh, không tích hợp quảng cáo.

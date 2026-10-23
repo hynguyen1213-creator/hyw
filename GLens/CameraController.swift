@@ -18,6 +18,7 @@ struct CaptureJob {
     var options = ProOptions()
     var portrait = false
     var frames: [Data] = []
+    var frameMetadata: [String] = []
 }
 final class CameraController: NSObject, ObservableObject, AVCaptureVideoDataOutputSampleBufferDelegate, AVCapturePhotoCaptureDelegate {
     @Published var preview: UIImage?
@@ -231,7 +232,8 @@ final class CameraController: NSObject, ObservableObject, AVCaptureVideoDataOutp
         let pro = photoOutput.availableRawPhotoPixelFormatTypes.contains { AVCapturePhotoOutput.isAppleProRAWPixelFormat($0) }
         let minISO = device.activeFormat.minISO, maxISO = device.activeFormat.maxISO
         let minDuration = max(0.000001, CMTimeGetSeconds(device.activeFormat.minExposureDuration))
-        let maxDuration = CMTimeGetSeconds(device.activeFormat.maxExposureDuration)
+        let videoLimit = locked { renderMode.isMovie } ? currentVideo.map { 1.0 / Double($0.fps) } ?? 1 : Double.infinity
+        let maxDuration = min(videoLimit, CMTimeGetSeconds(device.activeFormat.maxExposureDuration))
         let choices = discoverVideoChoices(device)
         let heif = photoOutput.availablePhotoCodecTypes.contains(.hevc)
         let bracket = photoOutput.maxBracketedCapturePhotoCount >= 3
@@ -293,7 +295,8 @@ final class CameraController: NSObject, ObservableObject, AVCaptureVideoDataOutp
         withDevice { device in
             if manual {
                 guard device.isExposureModeSupported(.custom) else { return }
-                let duration = max(CMTimeGetSeconds(device.activeFormat.minExposureDuration), min(seconds, CMTimeGetSeconds(device.activeFormat.maxExposureDuration)))
+                let videoLimit = self.locked { self.renderMode.isMovie } ? self.currentVideo.map { 1.0 / Double($0.fps) } ?? 1 : Double.infinity
+                let duration = max(CMTimeGetSeconds(device.activeFormat.minExposureDuration), min(seconds, min(videoLimit, CMTimeGetSeconds(device.activeFormat.maxExposureDuration))))
                 let value = max(device.activeFormat.minISO, min(iso, device.activeFormat.maxISO))
                 self.exposureRevision &+= 1
                 let revision = self.exposureRevision
@@ -476,7 +479,6 @@ final class CameraController: NSObject, ObservableObject, AVCaptureVideoDataOutp
             if let error { job.error = error.localizedDescription }
             if isRaw { job.raw = data } else {
                 job.jpeg = data
-                if let data { job.frames.append(data) }
                 if let exif,
                    let duration = (exif[kCGImagePropertyExifExposureTime as String] as? NSNumber)?.doubleValue,
                    let iso = (exif[kCGImagePropertyExifISOSpeedRatings as String] as? [NSNumber])?.first?.doubleValue,
@@ -485,6 +487,7 @@ final class CameraController: NSObject, ObservableObject, AVCaptureVideoDataOutp
                     job.metadata = String(format: "ISO %.0f  %@  %.1f×", iso, shutter, job.zoom)
                 }
             }
+            if !isRaw, let data { job.frames.append(data); job.frameMetadata.append(job.metadata) }
             self.jobs[id] = job
         }
     }
@@ -498,9 +501,10 @@ final class CameraController: NSObject, ObservableObject, AVCaptureVideoDataOutp
             let warning = [error?.localizedDescription, job.error, job.requestedRAW && job.raw == nil ? "DNG yêu cầu chưa được camera trả về; JPEG vẫn được giữ." : nil].compactMap { $0 }.joined(separator: " ")
             self.photoQueue.async {
                 if job.frames.count > 1 {
+                    defer { DispatchQueue.main.async { self.capturing = false; self.sequenceProgress = "" } }
                     for (index, frame) in job.frames.enumerated() {
                         guard let image = CIImage(data: frame, options: [.applyOrientationProperty: true]) else { continue }
-                        self.finishImage(image, settings: job.color, raw: nil, metadata: "BKT \(index + 1)/\(job.frames.count) · " + job.metadata, warning: nil, options: job.options, original: frame, completesCapture: index == job.frames.count - 1)
+                        self.finishImage(image, settings: job.color, raw: nil, metadata: "BKT \(index + 1)/\(job.frames.count) · " + job.frameMetadata[index], warning: nil, options: job.options, original: frame, completesCapture: false)
                     }
                 } else {
                     self.finishImage(image, settings: job.color, raw: job.raw, metadata: job.metadata, warning: warning.isEmpty ? nil : warning, options: job.options, original: jpeg, portrait: job.portrait)
@@ -511,8 +515,8 @@ final class CameraController: NSObject, ObservableObject, AVCaptureVideoDataOutp
     func finishImage(_ image: CIImage, settings: ColorSettings, raw: Data?, metadata: String, warning: String? = nil, options: ProOptions = ProOptions(), original: Data? = nil, portrait: Bool = false, completesCapture: Bool = true) {
         autoreleasepool {
             var finalSettings = settings; finalSettings.compare = false
-            let source = portrait ? portraitImage(image, amount: options.portraitBlur) : image
-            guard let jpeg = engine.jpeg(source, settings: finalSettings, metadata: metadata, encoding: options.encoding) else { notify("Chưa xuất được JPEG."); DispatchQueue.main.async { self.capturing = false }; return }
+            let source = (portrait ? portraitImage(image, amount: options.portraitBlur) : image).settingProperties(image.properties)
+            guard let jpeg = engine.jpeg(source, settings: finalSettings, metadata: metadata, encoding: options.encoding) else { notify("Chưa xuất được ảnh " + options.encoding.rawValue + "."); DispatchQueue.main.async { self.capturing = false }; return }
             do {
                 let item = try CaptureStore.shared.store(jpeg: jpeg, raw: raw, encoding: options.encoding, original: options.saveOriginal ? original : nil, metadata: metadata)
                 let thumb = CaptureStore.shared.thumbnail(item.url)

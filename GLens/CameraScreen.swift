@@ -45,6 +45,9 @@ struct CameraScreen: View {
         .task {
             if !ProcessInfo.processInfo.arguments.contains("--ui-smoke") { camera.authorizeAndStart(); horizon.start() }
             update(); camera.updateOptions()
+            #if targetEnvironment(simulator)
+            if ProcessInfo.processInfo.arguments.contains("--self-check") { Task.detached { await SimulatorChecks.run() } }
+            #endif
             if ProcessInfo.processInfo.arguments.contains("--pro-settings") { showProSettings = true }
             if ProcessInfo.processInfo.arguments.contains("--pro-controls") { showControls = true }
         }
@@ -292,7 +295,7 @@ struct CameraScreen: View {
                     if camera.afLocked { Text("AF-L").foregroundStyle(.yellow) }
                 }
                 Spacer()
-                if !camera.imported && !camera.mode.isMovie { Text(camera.photoResolution) }
+                if !camera.imported && !camera.mode.isMovie { Text(camera.mode == .longExposure ? "1920px" : camera.photoResolution) }
             }
             .font(.system(size: 8, weight: .regular, design: .monospaced))
             .foregroundStyle(.white.opacity(0.72)).padding(.horizontal, 7).padding(.bottom, 14)

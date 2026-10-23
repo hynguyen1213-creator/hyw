@@ -77,7 +77,7 @@ struct ProSettingsPanel: View {
                 }
                 Section("Chụp ảnh") {
                     Picker("Hẹn giờ", selection: $camera.options.timerSeconds) { ForEach([0, 3, 5, 10], id: \.self) { Text($0 == 0 ? "Tắt" : "\($0) giây").tag($0) } }
-                    if camera.supportsFlash && !camera.mode.isMovie { Picker("Flash", selection: $camera.options.flash) { Text("Tắt").tag(0); Text("Tự động").tag(1); Text("Bật").tag(2) } }
+                    if camera.supportsFlash && !camera.mode.isMovie && camera.mode != .longExposure { Picker("Flash", selection: $camera.options.flash) { Text("Tắt").tag(0); Text("Tự động").tag(1); Text("Bật").tag(2) } }
                     if camera.supportsTorch { Toggle("Đèn liên tục", isOn: Binding(get: { camera.torchOn }, set: { camera.setTorch($0) })) }
                 }
                 Section("G.LENS Pro 0.3") {
