@@ -6,7 +6,13 @@ G.LENS iOS 0.2.0 · Trạng thái
 Đã chuẩn bị workflow GitHub macOS tạo IPA unsigned hoặc signed và kiểm tra executable/chữ ký khi chạy.
 Bản web mới đã xuất bản; đã xem trên trình duyệt, đổi look và thử chụp JPEG.
 
-Chưa chạy: Xcode compile/typecheck/link, camera native trên iPhone và GitHub Actions.
-Chưa có: IPA đã build, IPA đã ký hoặc xác minh cài trên thiết bị.
+Đã chạy thành công: Xcode 26.6 compile/archive/link trên GitHub macOS và đóng gói IPA unsigned.
+Build: https://github.com/hynguyen1213-creator/hyw/actions/runs/39903900318
+Commit build: d9d0f5d7f9f03aada29bf322d715f8525529b4f1
+File: G_LENS_v0.2_UNSIGNED_REQUIRES_SIGNING.ipa (335060 bytes)
+SHA256: 1b97f565bc83511dd044627b4fb4097f946fbc31d88f61c6b041dfc8b3603ca0
+Đã kiểm tra artifact checksum, ZIP toàn vẹn, Mach-O arm64, platform iOS device, minimum iOS 17.0 và quyền camera/Photos.
+Chưa chạy: camera native trên iPhone và thử cài trên thiết bị.
+Chưa có: chứng chỉ/provisioning profile, chữ ký và IPA cài trực tiếp.
 Kết nối GitHub đã thấy repo hynguyen1213-creator/hyw; workflow tự build khi push main.
 Không coi kiểm tra parser hay việc có workflow là bằng chứng app đã build hoặc cài được.

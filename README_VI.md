@@ -2,7 +2,7 @@
 
 Camera iPhone viết bằng SwiftUI + AVFoundation, xử lý màu bằng Core Image ngay trên máy. Có project Xcode đầy đủ; không cần API key, không có máy chủ xử lý ảnh, không tích hợp quảng cáo.
 
-**Đây là mã nguồn beta, chưa phải IPA đã ký.** Môi trường tạo bản này là Linux, không có Xcode/iOS SDK/iPhone. Đã kiểm tra cú pháp Swift bằng parser, cấu trúc project và plist; chưa biên dịch hay kiểm chứng hoạt động camera native trên thiết bị. Bản web đi kèm đã được chạy thử riêng. Màu tự xây dựng, không phải LUT Leica chính hãng hoặc cam kết giống Xiaomi 90–100%.
+**IPA unsigned đã build thành công bằng Xcode 26.6 trên GitHub macOS.** Build [39903900318](https://github.com/hynguyen1213-creator/hyw/actions/runs/39903900318) từ commit `d9d0f5d7f9f03aada29bf322d715f8525529b4f1` đã archive, đóng gói và tải artifact thành công. Đã kiểm tra checksum, executable Mach-O arm64 cho iPhone và iOS tối thiểu 17.0. Chưa có chứng chỉ/provisioning profile để ký cài trực tiếp; chưa thử camera native trên iPhone. Bản web đã được chạy thử riêng. Màu tự xây dựng, không phải LUT Leica chính hãng hoặc cam kết giống Xiaomi 90–100%.
 
 
 ## Bản 0.2: giao diện camera mới và đường build IPA
