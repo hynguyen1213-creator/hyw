@@ -1,0 +1,12 @@
+G.LENS iOS 0.2.0 · Trạng thái
+
+Đã sửa giao diện camera: kính ngắm lớn, màn hình chính không cuộn, màu và phần cứng dùng bảng kéo lên.
+Đã sửa RAW partial-save, thông báo RAW thiếu, EXIF khung ảnh và chờ phơi sáng bị ngắt.
+Đã kiểm tra: cú pháp 7 file Swift bằng tree-sitter; PBX/Info.plist/XML; cú pháp shell; YAML workflow.
+Đã chuẩn bị workflow GitHub macOS tạo IPA unsigned hoặc signed và kiểm tra executable/chữ ký khi chạy.
+Bản web mới đã xuất bản; đã xem trên trình duyệt, đổi look và thử chụp JPEG.
+
+Chưa chạy: Xcode compile/typecheck/link, camera native trên iPhone và GitHub Actions.
+Chưa có: IPA đã build, IPA đã ký hoặc xác minh cài trên thiết bị.
+Kết nối GitHub đã thấy repo hynguyen1213-creator/hyw; workflow tự build khi push main.
+Không coi kiểm tra parser hay việc có workflow là bằng chứng app đã build hoặc cài được.
